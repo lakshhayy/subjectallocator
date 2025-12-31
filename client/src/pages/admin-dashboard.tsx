@@ -1,12 +1,29 @@
+import React, { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2 } from "lucide-react";
+import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Analytics {
   totalSubjects: number;
@@ -24,7 +41,7 @@ interface Analytics {
       name: string;
       code: string;
       semester: number;
-      allocationId: string; // Added to help with deletion
+      allocationId: string;
     }>;
   }>;
   subjectAllocations: Array<{
@@ -38,16 +55,41 @@ interface Analytics {
       id: string;
       name: string;
       username: string;
-      allocationId: string; // Added to help with deletion
+      allocationId: string;
     }>;
   }>;
 }
+
+interface Subject {
+  id: string;
+  code: string;
+  name: string;
+  semester: number;
+  type: string;
+  credits: number;
+  description: string;
+}
+
+const SUBJECT_TYPES = ["Core", "Elective", "Lab", "Project", "Internship"];
+const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [formData, setFormData] = useState({
+    code: "",
+    name: "",
+    semester: "3",
+    type: "Core",
+    credits: "4",
+    description: "",
+  });
 
   useEffect(() => {
     if (user && user.role !== "admin") {
@@ -122,6 +164,96 @@ export default function AdminDashboard() {
     },
   });
 
+  const addSubjectMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch("/api/admin/subjects", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to add subject");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-subjects"] });
+      setIsAddDialogOpen(false);
+      setFormData({
+        code: "",
+        name: "",
+        semester: "3",
+        type: "Core",
+        credits: "4",
+        description: "",
+      });
+      toast({
+        title: "Success",
+        description: "Subject added successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add subject.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const editSubjectMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch(`/api/admin/subjects/${editingSubject?.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to update subject");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-subjects"] });
+      setIsEditDialogOpen(false);
+      setEditingSubject(null);
+      toast({
+        title: "Success",
+        description: "Subject updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update subject.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteSubjectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/admin/subjects/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to delete subject");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-subjects"] });
+      toast({
+        title: "Success",
+        description: "Subject deleted successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete subject.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const { data: analytics, isLoading } = useQuery<Analytics>({
     queryKey: ["admin-analytics"],
     queryFn: async () => {
@@ -129,7 +261,6 @@ export default function AdminDashboard() {
       if (!response.ok) throw new Error("Failed to fetch analytics");
       const data = await response.json();
       
-      // Map allocation IDs for deletion
       const enhancedData = {
         ...data,
         facultyAllocations: data.facultyAllocations.map((fa: any) => ({
@@ -144,6 +275,51 @@ export default function AdminDashboard() {
     },
     enabled: user?.role === "admin",
   });
+
+  const { data: subjects = [] } = useQuery<Subject[]>({
+    queryKey: ["admin-subjects"],
+    queryFn: async () => {
+      const response = await fetch("/api/subjects", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch subjects");
+      return response.json();
+    },
+    enabled: user?.role === "admin",
+  });
+
+  const handleAddSubject = () => {
+    addSubjectMutation.mutate({
+      code: formData.code,
+      name: formData.name,
+      semester: parseInt(formData.semester),
+      type: formData.type,
+      credits: parseInt(formData.credits),
+      description: formData.description,
+    });
+  };
+
+  const handleEditSubject = () => {
+    editSubjectMutation.mutate({
+      code: formData.code,
+      name: formData.name,
+      semester: parseInt(formData.semester),
+      type: formData.type,
+      credits: parseInt(formData.credits),
+      description: formData.description,
+    });
+  };
+
+  const openEditDialog = (subject: Subject) => {
+    setEditingSubject(subject);
+    setFormData({
+      code: subject.code,
+      name: subject.name,
+      semester: subject.semester.toString(),
+      type: subject.type,
+      credits: subject.credits.toString(),
+      description: subject.description,
+    });
+    setIsEditDialogOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -168,9 +344,17 @@ export default function AdminDashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-serif font-bold text-foreground">Admin Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Overview of subject allocations and faculty preferences</p>
+            <p className="text-muted-foreground mt-1">Manage subjects, allocations and faculty preferences</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button 
+              variant="outline"
+              onClick={() => setIsAddDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Subject
+            </Button>
             <Button 
               variant="outline"
               onClick={() => {
@@ -241,6 +425,64 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Subject Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Subject Management</CardTitle>
+            <p className="text-sm text-muted-foreground">Add, edit, or remove subjects from the system</p>
+          </CardHeader>
+          <CardContent>
+            {subjects.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No subjects yet. Click "Add Subject" to create one.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {subjects.map((subject) => (
+                  <div 
+                    key={subject.id} 
+                    className="border rounded-lg p-4 flex items-start justify-between"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <h3 className="font-semibold">{subject.code}</h3>
+                        <p className="text-sm text-muted-foreground">Semester {subject.semester}</p>
+                      </div>
+                      <p className="text-sm mt-1">{subject.name}</p>
+                      <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
+                        <span className="bg-primary/10 text-primary px-2 py-1 rounded">{subject.type}</span>
+                        <span className="bg-muted px-2 py-1 rounded">{subject.credits} credits</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">{subject.description}</p>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditDialog(subject)}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          if (confirm("Are you sure you want to delete this subject?")) {
+                            deleteSubjectMutation.mutate(subject.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Faculty Allocations */}
         <Card>
@@ -348,6 +590,174 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Add Subject Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Subject</DialogTitle>
+            <DialogDescription>Create a new subject for the system</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="code">Subject Code</Label>
+              <Input
+                id="code"
+                placeholder="e.g., CSE 301"
+                value={formData.code}
+                onChange={(e) => setFormData({...formData, code: e.target.value})}
+              />
+            </div>
+            <div>
+              <Label htmlFor="name">Subject Name</Label>
+              <Input
+                id="name"
+                placeholder="e.g., Machine Learning"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="semester">Semester</Label>
+                <Select value={formData.semester} onValueChange={(value) => setFormData({...formData, semester: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEMESTERS.map(s => (
+                      <SelectItem key={s} value={s.toString()}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="type">Type</Label>
+                <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUBJECT_TYPES.map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="credits">Credits</Label>
+              <Input
+                id="credits"
+                type="number"
+                min="1"
+                max="10"
+                value={formData.credits}
+                onChange={(e) => setFormData({...formData, credits: e.target.value})}
+              />
+            </div>
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                placeholder="Brief description of the subject"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddSubject} disabled={addSubjectMutation.isPending}>
+              {addSubjectMutation.isPending ? "Adding..." : "Add Subject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Subject Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Subject</DialogTitle>
+            <DialogDescription>Update subject details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-code">Subject Code</Label>
+              <Input
+                id="edit-code"
+                placeholder="e.g., CSE 301"
+                value={formData.code}
+                onChange={(e) => setFormData({...formData, code: e.target.value})}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-name">Subject Name</Label>
+              <Input
+                id="edit-name"
+                placeholder="e.g., Machine Learning"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-semester">Semester</Label>
+                <Select value={formData.semester} onValueChange={(value) => setFormData({...formData, semester: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEMESTERS.map(s => (
+                      <SelectItem key={s} value={s.toString()}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-type">Type</Label>
+                <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUBJECT_TYPES.map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit-credits">Credits</Label>
+              <Input
+                id="edit-credits"
+                type="number"
+                min="1"
+                max="10"
+                value={formData.credits}
+                onChange={(e) => setFormData({...formData, credits: e.target.value})}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-description">Description</Label>
+              <Input
+                id="edit-description"
+                placeholder="Brief description of the subject"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleEditSubject} disabled={editSubjectMutation.isPending}>
+              {editSubjectMutation.isPending ? "Updating..." : "Update Subject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

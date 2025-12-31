@@ -108,6 +108,56 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Create new subject
+  app.post("/api/admin/subjects", requireAdmin, async (req, res) => {
+    try {
+      const subjectSchema = z.object({
+        code: z.string(),
+        name: z.string(),
+        semester: z.number().int(),
+        type: z.string(),
+        credits: z.number().int(),
+        description: z.string(),
+      });
+
+      const data = subjectSchema.parse(req.body);
+      const subject = await storage.createSubject(data);
+      return res.json(subject);
+    } catch (error) {
+      return res.status(400).json({ message: "Failed to create subject" });
+    }
+  });
+
+  // Admin: Update subject
+  app.put("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
+    try {
+      const subjectSchema = z.object({
+        code: z.string().optional(),
+        name: z.string().optional(),
+        semester: z.number().int().optional(),
+        type: z.string().optional(),
+        credits: z.number().int().optional(),
+        description: z.string().optional(),
+      });
+
+      const data = subjectSchema.parse(req.body);
+      const subject = await storage.updateSubject(req.params.id, data);
+      return res.json(subject);
+    } catch (error) {
+      return res.status(400).json({ message: "Failed to update subject" });
+    }
+  });
+
+  // Admin: Delete subject
+  app.delete("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteSubject(req.params.id);
+      return res.json({ message: "Subject deleted successfully" });
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to delete subject" });
+    }
+  });
+
   // ============ PREFERENCE ROUTES ============
   
   // Get user's ranked preferences

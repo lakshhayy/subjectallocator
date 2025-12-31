@@ -29,6 +29,9 @@ export interface IStorage {
   getAllSubjects(): Promise<Subject[]>;
   getSubjectById(id: string): Promise<Subject | undefined>;
   getSubjectsBySemester(semester: number): Promise<Subject[]>;
+  createSubject(subject: any): Promise<Subject>;
+  updateSubject(id: string, subject: any): Promise<Subject>;
+  deleteSubject(id: string): Promise<void>;
   
   // Allocation operations
   getUserAllocations(userId: string): Promise<(Allocation & { subject: Subject })[]>;
@@ -74,6 +77,20 @@ export class DatabaseStorage implements IStorage {
 
   async getSubjectsBySemester(semester: number): Promise<Subject[]> {
     return await db.select().from(subjects).where(eq(subjects.semester, semester));
+  }
+
+  async createSubject(subject: any): Promise<Subject> {
+    const result = await db.insert(subjects).values(subject).returning();
+    return result[0];
+  }
+
+  async updateSubject(id: string, subject: any): Promise<Subject> {
+    const result = await db.update(subjects).set(subject).where(eq(subjects.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteSubject(id: string): Promise<void> {
+    await db.delete(subjects).where(eq(subjects.id, id));
   }
 
   // Allocation operations
