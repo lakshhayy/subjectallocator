@@ -387,6 +387,22 @@ export async function registerRoutes(
       const totalSubjects = subjects.length;
       const totalAllocations = allocationsData.length;
       
+      // Get all faculty preferences for the admin to see live selections
+      const allFaculty = await db.select().from(users).where(eq(users.role, "faculty"));
+      const facultyPreferences = await Promise.all(
+        allFaculty.map(async (f) => {
+          const prefs = await storage.getUserPreferences(f.id);
+          return {
+            user: f,
+            preferences: prefs.map(p => p.subject)
+          };
+        })
+      );
+
+      // Count unique faculty who have submitted preferences
+      const facultyWithPreferences = facultyPreferences.filter(fp => fp.preferences.length > 0).length;
+      const totalPreferenceCount = facultyPreferences.reduce((acc, fp) => acc + fp.preferences.length, 0);
+
       // Group allocations by faculty
       const facultyAllocations = allocationsData.reduce((acc: any, allocation) => {
         const facultyId = allocation.user.id;
@@ -402,31 +418,6 @@ export async function registerRoutes(
 
       const totalFaculty = Object.keys(facultyAllocations).length;
 
-      // Group allocations by subject
-      const subjectAllocations = allocationsData.reduce((acc: any, allocation) => {
-        const subjectId = allocation.subject.id;
-        if (!acc[subjectId]) {
-          acc[subjectId] = {
-            subject: allocation.subject,
-            faculty: [],
-          };
-        }
-        acc[subjectId].faculty.push(allocation.user);
-        return acc;
-      }, {});
-
-      // Get all faculty preferences for the admin to see live selections
-      const allFaculty = await db.select().from(users).where(eq(users.role, "faculty"));
-      const facultyPreferences = await Promise.all(
-        allFaculty.map(async (f) => {
-          const prefs = await storage.getUserPreferences(f.id);
-          return {
-            user: f,
-            preferences: prefs.map(p => p.subject)
-          };
-        })
-      );
-
       const unallocatedSubjects = subjects.filter(
         subject => !subjectAllocations[subject.id]
       ).length;
@@ -434,7 +425,8 @@ export async function registerRoutes(
       return res.json({
         totalSubjects,
         totalAllocations,
-        totalFaculty,
+        totalFaculty: facultyWithPreferences,
+        totalPreferences: totalPreferenceCount,
         unallocatedSubjects,
         facultyAllocations: Object.values(facultyAllocations),
         subjectAllocations: Object.values(subjectAllocations),
@@ -442,6 +434,7 @@ export async function registerRoutes(
         rawAllocations,
       });
     } catch (error) {
+      console.error("Analytics Error:", error);
       return res.status(500).json({ message: "Failed to fetch analytics" });
     }
   });
