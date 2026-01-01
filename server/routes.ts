@@ -415,6 +415,18 @@ export async function registerRoutes(
         return acc;
       }, {});
 
+      // Get all faculty preferences for the admin to see live selections
+      const allFaculty = await db.select().from(users).where(eq(users.role, "faculty"));
+      const facultyPreferences = await Promise.all(
+        allFaculty.map(async (f) => {
+          const prefs = await storage.getUserPreferences(f.id);
+          return {
+            user: f,
+            preferences: prefs.map(p => p.subject)
+          };
+        })
+      );
+
       const unallocatedSubjects = subjects.filter(
         subject => !subjectAllocations[subject.id]
       ).length;
@@ -426,6 +438,7 @@ export async function registerRoutes(
         unallocatedSubjects,
         facultyAllocations: Object.values(facultyAllocations),
         subjectAllocations: Object.values(subjectAllocations),
+        facultyPreferences,
         rawAllocations,
       });
     } catch (error) {

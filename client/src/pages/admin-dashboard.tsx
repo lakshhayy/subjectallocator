@@ -58,6 +58,19 @@ interface Analytics {
       allocationId: string;
     }>;
   }>;
+  facultyPreferences: Array<{
+    user: {
+      id: string;
+      name: string;
+      username: string;
+    };
+    preferences: Array<{
+      id: string;
+      name: string;
+      code: string;
+      semester: number;
+    }>;
+  }>;
 }
 
 interface Subject {
@@ -276,7 +289,7 @@ export default function AdminDashboard() {
     enabled: user?.role === "admin",
   });
 
-  const { data: subjects = [] } = useQuery<Subject[]>({
+  const { data: subjectsList = [] } = useQuery<Subject[]>({
     queryKey: ["admin-subjects"],
     queryFn: async () => {
       const response = await fetch("/api/subjects", { credentials: "include" });
@@ -433,13 +446,13 @@ export default function AdminDashboard() {
             <p className="text-sm text-muted-foreground">Add, edit, or remove subjects from the system</p>
           </CardHeader>
           <CardContent>
-            {subjects.length === 0 ? (
+            {subjectsList.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No subjects yet. Click "Add Subject" to create one.
               </div>
             ) : (
               <div className="space-y-3">
-                {subjects.map((subject) => (
+                {subjectsList.map((subject) => (
                   <div 
                     key={subject.id} 
                     className="border rounded-lg p-4 flex items-start justify-between"
@@ -484,16 +497,61 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* Live Faculty Selections */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Current Faculty Selections (Live)</CardTitle>
+            <p className="text-sm text-muted-foreground">Real-time preferences submitted by faculty members (Pre-Allotment)</p>
+          </CardHeader>
+          <CardContent>
+            {analytics.facultyPreferences.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No selections made yet
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {analytics.facultyPreferences.filter(fp => fp.preferences.length > 0).map((fp) => (
+                  <div 
+                    key={fp.user.id} 
+                    className="border rounded-lg p-4"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h3 className="font-medium">{fp.user.name}</h3>
+                        <p className="text-sm text-muted-foreground">@{fp.user.username}</p>
+                      </div>
+                      <div className="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                        {fp.preferences.length} preferences saved
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {fp.preferences.map((subject, idx) => (
+                        <div 
+                          key={subject.id} 
+                          className="text-xs bg-muted border border-input px-2 py-1 rounded flex items-center gap-2"
+                        >
+                          <span className="font-bold text-primary">#{idx + 1}</span>
+                          <span>{subject.code}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Faculty Allocations */}
         <Card>
           <CardHeader>
-            <CardTitle>Faculty Allocations</CardTitle>
-            <p className="text-sm text-muted-foreground">Subject preferences by faculty members</p>
+            <CardTitle>Faculty Allocations (Final)</CardTitle>
+            <p className="text-sm text-muted-foreground">Subjects allotted by the algorithm</p>
           </CardHeader>
           <CardContent>
             {analytics.facultyAllocations.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No allocations yet
+                No allocations yet. Run the allotment round to process selections.
               </div>
             ) : (
               <div className="space-y-4">
@@ -509,7 +567,7 @@ export default function AdminDashboard() {
                         <p className="text-sm text-muted-foreground">@{allocation.user.username}</p>
                       </div>
                       <div className="text-sm font-medium bg-primary/10 text-primary px-3 py-1 rounded-full">
-                        {allocation.subjects.length}/3 selected
+                        {allocation.subjects.length} allotted
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -547,11 +605,11 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Subject Allocations */}
+        {/* Subject wise Mapping */}
         <Card>
           <CardHeader>
-            <CardTitle>Subject-wise Faculty Mapping</CardTitle>
-            <p className="text-sm text-muted-foreground">Which faculty members chose each subject</p>
+            <CardTitle>Subject-wise Faculty Mapping (Final)</CardTitle>
+            <p className="text-sm text-muted-foreground">Which faculty members are allotted to each subject</p>
           </CardHeader>
           <CardContent>
             {analytics.subjectAllocations.length === 0 ? (
