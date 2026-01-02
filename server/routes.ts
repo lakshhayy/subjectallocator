@@ -253,16 +253,19 @@ export async function registerRoutes(
         if (currentCount >= 2) continue;
 
         const prefs = await storage.getUserPreferences(faculty.id);
+        console.log(`Round 2 - Faculty: ${faculty.name}, Existing: ${currentCount}, Prefs: ${prefs.length}`);
         
         for (const pref of prefs) {
-          const isSubjectTakenByFaculty = existingAllocations.some(a => a.user.id === faculty.id && a.subject.id === pref.subjectId);
+          const isSubjectTakenByFaculty = existingAllocations.some(a => a.user.id === faculty.id && a.subjectId === pref.subjectId);
+          const isSubjectAllottedToAnyone = subjectAvailability.get(pref.subjectId) === 0;
           
-          if (subjectAvailability.get(pref.subjectId)! > 0 && !isSubjectTakenByFaculty) {
+          if (!isSubjectAllottedToAnyone && !isSubjectTakenByFaculty) {
             newAllocations.push({
               userId: faculty.id,
               subjectId: pref.subjectId,
             });
             subjectAvailability.set(pref.subjectId, 0);
+            console.log(`  Allotted: ${pref.subjectId}`);
             break; 
           }
         }
