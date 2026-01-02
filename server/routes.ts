@@ -417,7 +417,11 @@ export async function registerRoutes(
             subjects: [],
           };
         }
-        acc[facultyId].subjects.push(allocation.subject);
+        // Include the allocationId from the raw data
+        acc[facultyId].subjects.push({
+          ...allocation.subject,
+          allocationId: allocation.id
+        });
         return acc;
       }, {});
 
