@@ -249,17 +249,19 @@ export async function registerRoutes(
       console.log(`Running Allotment - Mode: ${isRound2 ? "Round 2" : "Round 1"}`);
 
       for (const faculty of sortedFaculty) {
-        const currentCount = existingAllocations.filter(a => a.user.id === faculty.id).length;
+        const currentFacultyAllocations = existingAllocations.filter(a => a.userId === faculty.id);
+        const currentCount = currentFacultyAllocations.length;
+        
         if (currentCount >= 2) continue;
 
         const prefs = await storage.getUserPreferences(faculty.id);
         console.log(`Round 2 - Faculty: ${faculty.name}, Existing: ${currentCount}, Prefs: ${prefs.length}`);
         
         for (const pref of prefs) {
-          const isSubjectTakenByFaculty = existingAllocations.some(a => a.user.id === faculty.id && a.subjectId === pref.subjectId);
+          const isSubjectTakenByThisFaculty = currentFacultyAllocations.some(a => a.subjectId === pref.subjectId);
           const isSubjectAllottedToAnyone = subjectAvailability.get(pref.subjectId) === 0;
           
-          if (!isSubjectAllottedToAnyone && !isSubjectTakenByFaculty) {
+          if (!isSubjectAllottedToAnyone && !isSubjectTakenByThisFaculty) {
             newAllocations.push({
               userId: faculty.id,
               subjectId: pref.subjectId,
