@@ -418,6 +418,19 @@ export async function registerRoutes(
 
       const totalFaculty = Object.keys(facultyAllocations).length;
 
+      // Group allocations by subject
+      const subjectAllocations = allocationsData.reduce((acc: any, allocation) => {
+        const subjectId = allocation.subject.id;
+        if (!acc[subjectId]) {
+          acc[subjectId] = {
+            subject: allocation.subject,
+            faculty: [],
+          };
+        }
+        acc[subjectId].faculty.push(allocation.user);
+        return acc;
+      }, {});
+
       const unallocatedSubjects = subjects.filter(
         subject => !subjectAllocations[subject.id]
       ).length;
