@@ -126,8 +126,10 @@ export default function AdminDashboard() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
       toast({
-        title: "Allotment Completed",
-        description: `Successfully allocated subjects for ${data.count} faculty members.`,
+        title: data.isRound2 ? "Round 2 Completed" : "Round 1 Completed",
+        description: data.isRound2 
+          ? `Successfully completed the second round. All faculty now have up to 2 subjects.`
+          : `Successfully completed Round 1. Click again to run Round 2 for remaining subjects.`,
       });
     },
     onError: (error: Error) => {
@@ -384,11 +386,15 @@ export default function AdminDashboard() {
             </Button>
             <Button 
               onClick={() => runAllotmentMutation.mutate()} 
-              disabled={runAllotmentMutation.isPending}
+              disabled={runAllotmentMutation.isPending || analytics?.totalAllocations >= analytics?.totalFaculty * 2}
               className="flex items-center gap-2"
             >
               <Play className="h-4 w-4" />
-              {runAllotmentMutation.isPending ? "Running Algorithm..." : "Run Allotment Round"}
+              {runAllotmentMutation.isPending 
+                ? "Running..." 
+                : analytics?.totalAllocations === 0 
+                  ? "Run Round 1" 
+                  : "Run Round 2"}
             </Button>
           </div>
         </div>
