@@ -226,11 +226,6 @@ export async function registerRoutes(
   // Admin: Run Allotment Algorithm (2-Round Counseling)
   app.post("/api/admin/run-allotment", requireAdmin, async (req, res) => {
     try {
-      const activeRound = await storage.getActiveRound();
-      if (!activeRound) {
-        return res.status(400).json({ message: "No active counseling round found" });
-      }
-
       const allUsers = await db.select().from(users);
       const allSubjects = await storage.getAllSubjects();
       
@@ -238,9 +233,6 @@ export async function registerRoutes(
       const existingAllocations = await storage.getAllAllocations();
       const alreadyAllottedSubjectIds = new Set(existingAllocations.map(a => a.subject.id));
       
-      // Faculty who already have an allocation in Round 1
-      const alreadyAllottedFacultyIds = new Set(existingAllocations.map(a => a.user.id));
-
       // JAC/JOSAA style: Sort faculty by seniority (lower number = more senior)
       const sortedFaculty = allUsers
         .filter(u => u.role === "faculty")
@@ -253,23 +245,16 @@ export async function registerRoutes(
       const newAllocations: any[] = [];
       const subjectAvailability = new Map(allSubjects.map(s => [s.id, alreadyAllottedSubjectIds.has(s.id) ? 0 : 1]));
 
-      // ROUND LOGIC: 
-      // If we are in Round 1 (no allocations yet), everyone gets 1 subject.
-      // If we are in Round 2 (allocations exist), everyone gets their 2nd subject from remaining.
-      
       const isRound2 = existingAllocations.length > 0;
       console.log(`Running Allotment - Mode: ${isRound2 ? "Round 2" : "Round 1"}`);
 
       for (const faculty of sortedFaculty) {
-        // Skip if faculty already reached limit (though here it's 1 per round)
         const currentCount = existingAllocations.filter(a => a.user.id === faculty.id).length;
         if (currentCount >= 2) continue;
 
         const prefs = await storage.getUserPreferences(faculty.id);
         
-        // Try to allot in rank order
         for (const pref of prefs) {
-          // Subject must be available AND not already allotted to THIS specific faculty
           const isSubjectTakenByFaculty = existingAllocations.some(a => a.user.id === faculty.id && a.subject.id === pref.subjectId);
           
           if (subjectAvailability.get(pref.subjectId)! > 0 && !isSubjectTakenByFaculty) {
@@ -277,22 +262,19 @@ export async function registerRoutes(
               userId: faculty.id,
               subjectId: pref.subjectId,
             });
-            subjectAvailability.set(pref.subjectId, 0); // Subject taken
+            subjectAvailability.set(pref.subjectId, 0);
             break; 
           }
         }
       }
 
-      // Save new allocations
       await db.transaction(async (tx) => {
         if (newAllocations.length > 0) {
           await tx.insert(allocations).values(newAllocations);
         }
         
-        // If this was the start (Round 1), we might keep the round active for Round 2
-        // If we want it to be a 2-step process triggered by admin:
-        // We'll update the round metadata status based on whether it's the final round
-        if (isRound2 || newAllocations.length === 0) {
+        const activeRound = await storage.getActiveRound();
+        if (activeRound && (isRound2 || newAllocations.length === 0)) {
            await tx.update(roundMetadata)
             .set({ status: "completed" })
             .where(eq(roundMetadata.id, activeRound.id));
