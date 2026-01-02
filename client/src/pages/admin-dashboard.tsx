@@ -372,7 +372,7 @@ export default function AdminDashboard() {
             <Button 
               variant="outline"
               onClick={() => {
-                if(confirm("Are you sure you want to reset all allotments and restart the round?")) {
+                if(confirm("Are you sure you want to reset ALL faculty preferences and allotments? This will start a completely fresh round.")) {
                   resetSystemMutation.mutate();
                 }
               }}
@@ -380,7 +380,7 @@ export default function AdminDashboard() {
               className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white"
             >
               <RotateCcw className="h-4 w-4" />
-              Reset Round
+              Reset All Selections
             </Button>
             <Button 
               onClick={() => runAllotmentMutation.mutate()} 

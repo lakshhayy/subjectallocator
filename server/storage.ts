@@ -43,6 +43,7 @@ export interface IStorage {
   // Preference operations
   getUserPreferences(userId: string): Promise<(SubjectPreference & { subject: Subject })[]>;
   savePreferences(userId: string, prefs: { subjectId: string; rank: number }[]): Promise<void>;
+  resetAllSelections(): Promise<void>;
 
   // Round operations
   getActiveRound(): Promise<RoundMetadata | undefined>;
@@ -169,6 +170,14 @@ export class DatabaseStorage implements IStorage {
           prefs.map(p => ({ ...p, userId }))
         );
       }
+    });
+  }
+
+  async resetAllSelections(): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(subjectPreferences);
+      await tx.delete(allocations);
+      await tx.update(roundMetadata).set({ status: "active" });
     });
   }
 

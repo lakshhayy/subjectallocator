@@ -196,11 +196,8 @@ export async function registerRoutes(
   // Admin: Reset rounds and allocations
   app.post("/api/admin/reset-system", requireAdmin, async (req, res) => {
     try {
-      await db.transaction(async (tx) => {
-        await tx.delete(allocations);
-        await tx.update(roundMetadata).set({ status: "active" });
-      });
-      return res.json({ message: "System reset successfully. All allotments cleared." });
+      await storage.resetAllSelections();
+      return res.json({ message: "System reset successfully. All preferences and allotments cleared." });
     } catch (error) {
       return res.status(500).json({ message: "Failed to reset system" });
     }
