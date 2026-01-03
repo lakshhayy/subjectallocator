@@ -16,10 +16,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
 
+  // FIX: Admin should only see the Dashboard, not the Subject Allotment page
   const navItems = user?.role === "admin" 
     ? [
         { href: "/admin", label: "Admin Dashboard", icon: LayoutDashboard },
-        { href: "/allotment", label: "Subject Allotment", icon: BookOpen },
       ]
     : [
         { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -50,7 +50,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href;
-            
+
             return (
               <Link key={item.href} href={item.href} className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer",
@@ -71,7 +71,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
               <p className="text-[10px] text-muted-foreground truncate capitalize">{user.role}</p>
             </div>
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">

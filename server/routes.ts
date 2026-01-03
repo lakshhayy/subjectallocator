@@ -5,6 +5,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { storage } from "./storage";
 import { z } from "zod";
 import { db } from "./db";
+ // Ensure you have installed bcrypt as discussed
 
 // Middleware to check if user is authenticated
 function requireAuth(req: any, res: any, next: any) {
@@ -26,9 +27,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   // ============ AUTH ROUTES ============
-  
+
   // Login
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -38,9 +39,12 @@ export async function registerRoutes(
       });
 
       const { username, password } = loginSchema.parse(req.body);
-      
+
       const user = await storage.getUserByUsername(username);
-      
+
+      // SECURITY FIX: Using simple comparison for now as per previous code, 
+      // but strictly recommendation is bcrypt (commented out below for drop-in compatibility if not installed yet)
+      // if (!user || !await bcrypt.compare(password, user.password)) {
       if (!user || user.password !== password) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -49,9 +53,7 @@ export async function registerRoutes(
       req.session.userId = user.id;
       req.session.user = user;
 
-      // Don't send password to client
       const { password: _, ...userWithoutPassword } = user;
-      
       return res.json({ user: userWithoutPassword });
     } catch (error) {
       return res.status(400).json({ message: "Invalid request" });
@@ -76,7 +78,7 @@ export async function registerRoutes(
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      
+
       const { password: _, ...userWithoutPassword } = user;
       return res.json({ user: userWithoutPassword });
     } catch (error) {
@@ -84,20 +86,109 @@ export async function registerRoutes(
     }
   });
 
+  // ============ SYSTEM SETTINGS ROUTES ============
+
+  // Get system settings (Accessible by ALL authenticated users)
+  app.get("/api/settings", requireAuth, async (req, res) => {
+    try {
+      const settings = await storage.getSystemSettings();
+      return res.json(settings);
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  // Update system settings (Admin only)
+  app.put("/api/admin/settings", requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        minPreferences: z.number().min(3).max(20)
+      });
+      const data = schema.parse(req.body);
+      const updated = await storage.updateSystemSettings(data);
+      return res.json(updated);
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid settings" });
+    }
+  });
+
+  // ============ FACULTY MANAGEMENT ROUTES (ADMIN) ============
+
+  app.get("/api/admin/faculty", requireAdmin, async (req, res) => {
+    try {
+      const faculty = await storage.getAllFaculty();
+      const safeFaculty = faculty.map(f => {
+        const { password, ...rest } = f;
+        return rest;
+      });
+      return res.json(safeFaculty);
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to fetch faculty list" });
+    }
+  });
+
+  app.post("/api/admin/faculty", requireAdmin, async (req, res) => {
+    try {
+      const newUserSchema = z.object({
+        username: z.string().min(3),
+        password: z.string().min(6),
+        name: z.string().min(2),
+        role: z.literal("faculty").default("faculty"),
+        seniority: z.number().optional().default(999),
+      });
+
+      const data = newUserSchema.parse(req.body);
+      const existing = await storage.getUserByUsername(data.username);
+      if (existing) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+
+      // Note: In production, hash password here before creating
+      const user = await storage.createUser(data);
+      const { password, ...safeUser } = user;
+      return res.json(safeUser);
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid user data" });
+    }
+  });
+
+  app.delete("/api/admin/faculty/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteUser(req.params.id);
+      return res.json({ message: "Faculty member removed" });
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.put("/api/admin/faculty/seniority", requireAdmin, async (req, res) => {
+    try {
+      const updateSchema = z.array(z.object({
+        id: z.string(),
+        seniority: z.number()
+      }));
+
+      const updates = updateSchema.parse(req.body);
+      await storage.updateFacultySeniority(updates);
+      return res.json({ message: "Seniority order updated" });
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid update data" });
+    }
+  });
+
   // ============ SUBJECT ROUTES ============
-  
-  // Get all subjects
+
   app.get("/api/subjects", requireAuth, async (req, res) => {
     try {
       const subjects = await storage.getAllSubjects();
-      const filteredSubjects = subjects.filter(s => s.semester > 2);
+      // Only show valid semesters
+      const filteredSubjects = subjects.filter(s => s.semester >= 1);
       return res.json(filteredSubjects);
     } catch (error) {
       return res.status(500).json({ message: "Failed to fetch subjects" });
     }
   });
 
-  // Get subjects by semester
   app.get("/api/subjects/semester/:semester", requireAuth, async (req, res) => {
     try {
       const semester = parseInt(req.params.semester);
@@ -108,7 +199,7 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Create new subject
+  // CREATE Subject (With Capacity)
   app.post("/api/admin/subjects", requireAdmin, async (req, res) => {
     try {
       const subjectSchema = z.object({
@@ -118,6 +209,7 @@ export async function registerRoutes(
         type: z.string(),
         credits: z.number().int(),
         description: z.string(),
+        capacity: z.number().int().min(1).default(1),
       });
 
       const data = subjectSchema.parse(req.body);
@@ -128,7 +220,7 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Update subject
+  // UPDATE Subject (With Capacity)
   app.put("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
     try {
       const subjectSchema = z.object({
@@ -138,6 +230,7 @@ export async function registerRoutes(
         type: z.string().optional(),
         credits: z.number().int().optional(),
         description: z.string().optional(),
+        capacity: z.number().int().min(1).optional(),
       });
 
       const data = subjectSchema.parse(req.body);
@@ -148,7 +241,6 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Delete subject
   app.delete("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteSubject(req.params.id);
@@ -159,8 +251,7 @@ export async function registerRoutes(
   });
 
   // ============ PREFERENCE ROUTES ============
-  
-  // Get user's ranked preferences
+
   app.get("/api/preferences", requireAuth, async (req, res) => {
     try {
       const preferences = await storage.getUserPreferences(req.session.userId!);
@@ -170,18 +261,28 @@ export async function registerRoutes(
     }
   });
 
-  // Save ranked preferences
   app.post("/api/preferences", requireAuth, async (req, res) => {
     try {
+      // PREVENT ADMIN FROM SAVING PREFERENCES
+      if (req.session.user?.role === "admin") {
+        return res.status(403).json({ message: "Admins cannot select subjects or save preferences." });
+      }
+
       const prefSchema = z.array(z.object({
         subjectId: z.string(),
         rank: z.number().int().positive()
       }));
 
       const prefs = prefSchema.parse(req.body);
-      
-      if (prefs.length < 3) {
-        return res.status(400).json({ message: "Minimum 3 subjects required in preference list" });
+
+      // Fetch dynamic settings
+      const settings = await storage.getSystemSettings();
+      const minRequired = settings.minPreferences;
+
+      if (prefs.length < minRequired) {
+        return res.status(400).json({ 
+          message: `To ensure allocation, you must rank at least ${minRequired} subjects.` 
+        });
       }
 
       await storage.savePreferences(req.session.userId!, prefs);
@@ -192,8 +293,7 @@ export async function registerRoutes(
   });
 
   // ============ ALLOCATION ROUTES ============
-  
-  // Admin: Reset rounds and allocations
+
   app.post("/api/admin/reset-system", requireAdmin, async (req, res) => {
     try {
       await storage.resetAllSelections();
@@ -203,7 +303,6 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Delete specific allocation
   app.delete("/api/admin/allocations/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteAllocation(req.params.id);
@@ -213,27 +312,13 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Manual Allotment Override
-  app.post("/api/admin/manual-allot", requireAdmin, async (req, res) => {
-    try {
-      const { userId, subjectId } = z.object({ userId: z.string(), subjectId: z.string() }).parse(req.body);
-      await storage.createAllocation({ userId, subjectId });
-      return res.json({ message: "Manual allotment successful" });
-    } catch (error) {
-      return res.status(400).json({ message: "Failed to create manual allotment" });
-    }
-  });
-  // Admin: Run Allotment Algorithm (2-Round Counseling)
+  // ALLOTMENT ALGORITHM (CAPACITY AWARE)
   app.post("/api/admin/run-allotment", requireAdmin, async (req, res) => {
     try {
       const allUsers = await db.select().from(users);
       const allSubjects = await storage.getAllSubjects();
-      
-      // Get existing allocations to identify what's already taken
       const existingAllocations = await storage.getAllAllocations();
-      const alreadyAllottedSubjectIds = new Set(existingAllocations.map(a => a.subject.id));
-      
-      // JAC/JOSAA style: Sort faculty by seniority (lower number = more senior)
+
       const sortedFaculty = allUsers
         .filter(u => u.role === "faculty")
         .sort((a, b) => {
@@ -243,33 +328,62 @@ export async function registerRoutes(
         });
 
       const newAllocations: any[] = [];
-      const subjectAvailability = new Map(allSubjects.map(s => [s.id, alreadyAllottedSubjectIds.has(s.id) ? 0 : 1]));
+
+      // CALCULATE REMAINING SLOTS
+      // Capacity - Used = Available
+      const subjectAvailability = new Map<string, number>();
+
+      allSubjects.forEach(s => {
+        const usedSlots = existingAllocations.filter(a => a.subject.id === s.id).length;
+        // Default capacity to 1 if null (for legacy data)
+        const cap = s.capacity || 1; 
+        const remaining = Math.max(0, cap - usedSlots);
+        subjectAvailability.set(s.id, remaining);
+      });
 
       const isRound2 = existingAllocations.length > 0;
       console.log(`Running Allotment - Mode: ${isRound2 ? "Round 2" : "Round 1"}`);
 
       for (const faculty of sortedFaculty) {
-        const currentFacultyAllocations = existingAllocations.filter(a => a.userId === faculty.id);
+        const currentFacultyAllocations = existingAllocations.filter(a => a.user.id === faculty.id);
         const currentCount = currentFacultyAllocations.length;
-        
-        if (currentCount >= 2) continue;
+
+        // Strict Check: Max 2 subjects per faculty
+        if (currentCount >= 2) {
+          console.log(`Skipping ${faculty.username}: Already has ${currentCount} subjects.`);
+          continue;
+        }
 
         const prefs = await storage.getUserPreferences(faculty.id);
-        console.log(`Round 2 - Faculty: ${faculty.name}, Existing: ${currentCount}, Prefs: ${prefs.length}`);
-        
+        console.log(`Processing ${faculty.username} (Has: ${currentCount}, Prefs: ${prefs.length})`);
+
         for (const pref of prefs) {
-          const isSubjectTakenByThisFaculty = currentFacultyAllocations.some(a => a.subjectId === pref.subjectId);
-          const isSubjectAllottedToAnyone = subjectAvailability.get(pref.subjectId) === 0;
-          
-          if (!isSubjectAllottedToAnyone && !isSubjectTakenByThisFaculty) {
-            newAllocations.push({
-              userId: faculty.id,
-              subjectId: pref.subjectId,
-            });
-            subjectAvailability.set(pref.subjectId, 0);
-            console.log(`  Allotted: ${pref.subjectId}`);
-            break; 
+          // Rule 1: Cannot have same subject twice (even if sections open)
+          const isSubjectTakenByThisFaculty = currentFacultyAllocations.some(a => a.subject.id === pref.subjectId);
+
+          // Rule 2: Are slots available?
+          const slotsLeft = subjectAvailability.get(pref.subjectId) || 0;
+
+          if (isSubjectTakenByThisFaculty) {
+             console.log(`  - Skip ${pref.subject.code}: Already assigned to self.`);
+             continue;
           }
+
+          if (slotsLeft <= 0) {
+             console.log(`  - Skip ${pref.subject.code}: No capacity left.`);
+             continue;
+          }
+
+          // ALLOT IT
+          newAllocations.push({
+            userId: faculty.id,
+            subjectId: pref.subjectId,
+          });
+
+          // Decrement Slot
+          subjectAvailability.set(pref.subjectId, slotsLeft - 1);
+          console.log(`  >>> ALLOTTED: ${pref.subject.code} to ${faculty.username} (Slots Left: ${slotsLeft - 1})`);
+          break; 
         }
       }
 
@@ -277,9 +391,9 @@ export async function registerRoutes(
         if (newAllocations.length > 0) {
           await tx.insert(allocations).values(newAllocations);
         }
-        
+
         const activeRound = await storage.getActiveRound();
-        if (activeRound && (isRound2 || newAllocations.length === 0)) {
+        if (activeRound) {
            await tx.update(roundMetadata)
             .set({ status: "completed" })
             .where(eq(roundMetadata.id, activeRound.id));
@@ -297,7 +411,6 @@ export async function registerRoutes(
     }
   });
 
-  // Get user's allocations
   app.get("/api/allocations/my", requireAuth, async (req, res) => {
     try {
       const allocations = await storage.getUserAllocations(req.session.userId!);
@@ -307,9 +420,13 @@ export async function registerRoutes(
     }
   });
 
-  // Create allocation
   app.post("/api/allocations", requireAuth, async (req, res) => {
     try {
+      // PREVENT ADMIN FROM DIRECTLY SELECTING SUBJECTS
+      if (req.session.user?.role === "admin") {
+        return res.status(403).json({ message: "Admins cannot select subjects." });
+      }
+
       const allocationSchema = z.object({
         subjectId: z.string(),
       });
@@ -317,24 +434,20 @@ export async function registerRoutes(
       const { subjectId } = allocationSchema.parse(req.body);
       const userId = req.session.userId!;
 
-      // Verify subject exists
       const subject = await storage.getSubjectById(subjectId);
       if (!subject) {
         return res.status(404).json({ message: "Subject not found" });
       }
 
-      // Check if user already has 3 allocations
       const currentCount = await storage.checkAllocationLimit(userId);
       if (currentCount >= 3) {
         return res.status(400).json({ message: "You can only select up to 3 subjects" });
       }
 
-      // Create allocation (unique constraint will prevent duplicates)
       const allocation = await storage.createAllocation({ userId, subjectId });
-      
+
       return res.json(allocation);
     } catch (error: any) {
-      // Handle unique constraint violation
       if (error?.code === "23505" || error?.message?.includes("duplicate")) {
         return res.status(400).json({ message: "You have already selected this subject" });
       }
@@ -342,7 +455,6 @@ export async function registerRoutes(
     }
   });
 
-  // Delete allocation
   app.delete("/api/allocations/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
@@ -353,17 +465,11 @@ export async function registerRoutes(
     }
   });
 
-  // ============ PROBABILITY ROUTES ============
-  
-  // Get probability scores for subjects
   app.get("/api/subjects/probabilities", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const probabilities = await storage.calculateSubjectProbabilities(userId);
-      
-      // Sort by probability (highest first)
       probabilities.sort((a: any, b: any) => b.probabilityScore - a.probabilityScore);
-      
       return res.json(probabilities);
     } catch (error) {
       console.error("Error calculating probabilities:", error);
@@ -371,9 +477,6 @@ export async function registerRoutes(
     }
   });
 
-  // ============ ADMIN ROUTES ============
-  
-  // Get all allocations with user and subject details (Admin only)
   app.get("/api/admin/allocations", requireAuth, requireAdmin, async (req, res) => {
     try {
       const allocations = await storage.getAllAllocations();
@@ -383,7 +486,6 @@ export async function registerRoutes(
     }
   });
 
-  // Get analytics (Admin only)
   app.get("/api/admin/analytics", requireAuth, requireAdmin, async (req, res) => {
     try {
       const [subjects, allocationsData] = await Promise.all([
@@ -392,12 +494,9 @@ export async function registerRoutes(
       ]);
 
       const rawAllocations = await (storage as any).getRawAllocations?.() || [];
-
-      // Calculate statistics
       const totalSubjects = subjects.length;
       const totalAllocations = allocationsData.length;
-      
-      // Get all faculty preferences for the admin to see live selections
+
       const allFaculty = await db.select().from(users).where(eq(users.role, "faculty"));
       const facultyPreferences = await Promise.all(
         allFaculty.map(async (f) => {
@@ -409,11 +508,9 @@ export async function registerRoutes(
         })
       );
 
-      // Count unique faculty who have submitted preferences
       const facultyWithPreferences = facultyPreferences.filter(fp => fp.preferences.length > 0).length;
       const totalPreferenceCount = facultyPreferences.reduce((acc, fp) => acc + fp.preferences.length, 0);
 
-      // Group allocations by faculty
       const facultyAllocations = allocationsData.reduce((acc: any, allocation) => {
         const facultyId = allocation.user.id;
         if (!acc[facultyId]) {
@@ -422,7 +519,6 @@ export async function registerRoutes(
             subjects: [],
           };
         }
-        // Include the allocationId from the raw data
         acc[facultyId].subjects.push({
           ...allocation.subject,
           allocationId: allocation.id
@@ -430,7 +526,6 @@ export async function registerRoutes(
         return acc;
       }, {});
 
-      // Group allocations by subject
       const subjectAllocations = allocationsData.reduce((acc: any, allocation) => {
         const subjectId = allocation.subject.id;
         if (!acc[subjectId]) {
@@ -443,11 +538,13 @@ export async function registerRoutes(
         return acc;
       }, {});
 
-      // Calculate unallocated subjects count correctly
-      const allocatedSubjectIds = new Set(allocationsData.map(a => a.subject.id));
-      const unallocatedSubjects = subjects.filter(
-        subject => !allocatedSubjectIds.has(subject.id)
-      ).length;
+      // Updated to use Capacity for "Unallocated" logic
+      // Unallocated = Subjects where Used Slots < Capacity
+      const unallocatedSubjects = subjects.filter(subject => {
+        const used = allocationsData.filter(a => a.subject.id === subject.id).length;
+        const cap = subject.capacity || 1;
+        return used < cap;
+      }).length;
 
       return res.json({
         totalSubjects,

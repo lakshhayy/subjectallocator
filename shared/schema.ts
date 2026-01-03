@@ -27,6 +27,8 @@ export const subjects = pgTable("subjects", {
   type: text("type").notNull(), // "Core", "Elective", "Lab", "Project", "Internship"
   credits: integer("credits").notNull(),
   description: text("description").notNull(),
+  // NEW: Capacity controls how many faculty can take this subject (e.g., 3 for 3 Sections)
+  capacity: integer("capacity").notNull().default(1), 
 });
 
 export const insertSubjectSchema = createInsertSchema(subjects).omit({
@@ -54,41 +56,38 @@ export const insertAllocationSchema = createInsertSchema(allocations).omit({
 export type InsertAllocation = z.infer<typeof insertAllocationSchema>;
 export type Allocation = typeof allocations.$inferSelect;
 
-// ========== NEW TABLES FOR PROBABILITY SYSTEM ==========
+// ========== PROBABILITY SYSTEM TABLES ==========
 
-// Table: Subject History (tracks which faculty taught what in past semesters)
 export const subjectHistory = pgTable("subject_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  code: text("code").notNull(), // CSE 321, CSE 312, etc.
-  name: text("name").notNull(), // "Machine Learning", "Compiler Design"
-  semesterYear: text("semester_year").notNull(), // "Jul-Dec-2025", "Jan-Jun-2025"
+  code: text("code").notNull(), 
+  name: text("name").notNull(),
+  semesterYear: text("semester_year").notNull(), 
   facultyId: varchar("faculty_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   creditsTheory: integer("credits_theory").notNull(),
   creditsLab: integer("credits_lab").notNull(),
-  subjectType: text("subject_type").notNull(), // "Theory", "Lab", "Seminar", "Project"
-  category: text("category").notNull(), // "Networks", "ML", "Databases", "Security", "Compilers", "DataStructures", "Other"
+  subjectType: text("subject_type").notNull(), 
+  category: text("category").notNull(), 
 });
 
 export type SubjectHistory = typeof subjectHistory.$inferSelect;
 
-// Table: Faculty Load History (tracks aggregate load per semester)
 export const facultyLoadHistory = pgTable("faculty_load_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   facultyId: varchar("faculty_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  semesterYear: text("semester_year").notNull(), // "Jul-Dec-2025", "Jan-Jun-2025"
+  semesterYear: text("semester_year").notNull(), 
   totalCredits: integer("total_credits").notNull(),
   numberOfSubjects: integer("number_of_subjects").notNull(),
-  primarySpecialization: text("primary_specialization"), // "Networks", "ML", etc.
+  primarySpecialization: text("primary_specialization"), 
 });
 
 export type FacultyLoadHistory = typeof facultyLoadHistory.$inferSelect;
 
-// Table: Subject Preferences (ranked list)
 export const subjectPreferences = pgTable("subject_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   subjectId: varchar("subject_id").notNull().references(() => subjects.id, { onDelete: "cascade" }),
-  rank: integer("rank").notNull(), // 1, 2, 3...
+  rank: integer("rank").notNull(), 
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueUserRank: sql`UNIQUE (${table.userId}, ${table.rank})`,
@@ -103,16 +102,23 @@ export const insertSubjectPreferenceSchema = createInsertSchema(subjectPreferenc
 export type InsertSubjectPreference = z.infer<typeof insertSubjectPreferenceSchema>;
 export type SubjectPreference = typeof subjectPreferences.$inferSelect;
 
-// Update Round Metadata for Counseling
 export const roundMetadata = pgTable("round_metadata", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   roundId: varchar("round_id").notNull().unique(),
   semesterYear: text("semester_year").notNull(),
-  roundNumber: integer("round_number").notNull(), // 1, 2
-  status: text("status").notNull().default("not_started"), // "not_started", "active", "completed"
+  roundNumber: integer("round_number").notNull(), 
+  status: text("status").notNull().default("not_started"), 
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
-  nextRoundStartTime: timestamp("next_round_start_time"), // For the 1-day gap
+  nextRoundStartTime: timestamp("next_round_start_time"), 
 });
 
 export type RoundMetadata = typeof roundMetadata.$inferSelect;
+
+// System Settings Table (Singleton)
+export const systemSettings = pgTable("system_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  minPreferences: integer("min_preferences").notNull().default(7),
+});
+
+export type SystemSettings = typeof systemSettings.$inferSelect;

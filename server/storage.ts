@@ -8,6 +8,7 @@ import {
   facultyLoadHistory,
   subjectPreferences,
   roundMetadata,
+  systemSettings,
   type User, 
   type InsertUser,
   type Subject,
@@ -16,7 +17,8 @@ import {
   type SubjectHistory,
   type FacultyLoadHistory,
   type SubjectPreference,
-  type RoundMetadata
+  type RoundMetadata,
+  type SystemSettings
 } from "@shared/schema";
 
 export interface IStorage {
@@ -24,7 +26,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+  getAllFaculty(): Promise<User[]>;
+  deleteUser(id: string): Promise<void>;
+  updateFacultySeniority(items: { id: string; seniority: number }[]): Promise<void>;
+
   // Subject operations
   getAllSubjects(): Promise<Subject[]>;
   getSubjectById(id: string): Promise<Subject | undefined>;
@@ -32,7 +37,7 @@ export interface IStorage {
   createSubject(subject: any): Promise<Subject>;
   updateSubject(id: string, subject: any): Promise<Subject>;
   deleteSubject(id: string): Promise<void>;
-  
+
   // Allocation operations
   getUserAllocations(userId: string): Promise<(Allocation & { subject: Subject })[]>;
   createAllocation(allocation: InsertAllocation): Promise<Allocation>;
@@ -47,6 +52,15 @@ export interface IStorage {
 
   // Round operations
   getActiveRound(): Promise<RoundMetadata | undefined>;
+
+  // Probability operations
+  getSubjectHistory(facultyId?: string): Promise<SubjectHistory[]>;
+  getFacultyLoadHistory(facultyId: string): Promise<FacultyLoadHistory[]>;
+  calculateSubjectProbabilities(userId: string): Promise<any[]>;
+
+  // System Settings operations (NEW)
+  getSystemSettings(): Promise<SystemSettings>;
+  updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -64,6 +78,27 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const result = await db.insert(users).values(insertUser).returning();
     return result[0];
+  }
+
+  async getAllFaculty(): Promise<User[]> {
+    return await db.select()
+      .from(users)
+      .where(eq(users.role, "faculty"))
+      .orderBy(users.seniority);
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async updateFacultySeniority(items: { id: string; seniority: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const item of items) {
+        await tx.update(users)
+          .set({ seniority: item.seniority })
+          .where(eq(users.id, item.id));
+      }
+    });
   }
 
   // Subject operations
@@ -192,7 +227,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ========== PROBABILITY SYSTEM OPERATIONS ==========
-  
+
   async getSubjectHistory(facultyId?: string): Promise<SubjectHistory[]> {
     if (facultyId) {
       return await db.select().from(subjectHistory).where(eq(subjectHistory.facultyId, facultyId));
@@ -204,53 +239,42 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(facultyLoadHistory).where(eq(facultyLoadHistory.facultyId, facultyId));
   }
 
+  // FIXED SYNTAX ERROR HERE
   async calculateSubjectProbabilities(userId: string): Promise<any[]> {
-    // Get all subjects
     const allSubjects = await this.getAllSubjects();
-    
-    // Get all history to compare with other faculty (seniority/overlap)
     const allHistory = await this.getSubjectHistory();
     const facultyHistory = allHistory.filter(h => h.facultyId === userId);
     const loadHistory = await this.getFacultyLoadHistory(userId);
-    
-    // Get most recent semester load
+
     const previousLoad = loadHistory.sort((a, b) => 
       new Date(b.semesterYear).getTime() - new Date(a.semesterYear).getTime()
     )[0];
 
-    // Calculate probability for each subject
     return allSubjects.map(subject => {
       let score = 0;
 
-      // 1. Individual Historical Frequency (0-40 points)
-      // High priority if taught frequently by this specific faculty
       const individualCount = facultyHistory.filter(h => h.code === subject.code).length;
       if (individualCount >= 2) score += 40;
       else if (individualCount === 1) score += 25;
 
-      // 2. Global Seniority/Overlap Penalty (0 to -30 points)
-      // If many other (potentially senior) faculty have taught this, probability decreases
       const uniqueOthers = new Set(allHistory.filter(h => h.code === subject.code && h.facultyId !== userId).map(h => h.facultyId)).size;
-      
-      if (uniqueOthers > 2) score -= 20; // Highly contested
-      else if (uniqueOthers > 0) score -= 10; // Some competition
 
-      // 3. Load Balancing (0-30 points)
+      if (uniqueOthers > 2) score -= 20; 
+      else if (uniqueOthers > 0) score -= 10; 
+
       if (previousLoad) {
-        if (previousLoad.totalCredits < 8) score += 30; // Light load
-        else if (previousLoad.totalCredits < 12) score += 15; // Medium
+        if (previousLoad.totalCredits < 8) score += 30; 
+        else if (previousLoad.totalCredits < 12) score += 15; 
       } else {
-        score += 20; // Default for new faculty or missing data
+        score += 20; 
       }
 
-      // 4. Subject Affinity/Specialization (0-30 points)
       const primarySpec = previousLoad?.primarySpecialization;
       const subjectCategory = this.extractCategory(subject.name);
-      
+
       if (primarySpec === subjectCategory) score += 30;
       else if (facultyHistory.some(h => h.category === subjectCategory)) score += 15;
 
-      // Ensure score is within 0-100
       const finalScore = Math.min(100, Math.max(0, score));
 
       return {
@@ -288,6 +312,25 @@ export class DatabaseStorage implements IStorage {
     if (score >= 70) return "Highly Likely";
     if (score >= 40) return "Likely";
     return "Unlikely";
+  }
+
+  // System Settings Implementation
+  async getSystemSettings(): Promise<SystemSettings> {
+    const result = await db.select().from(systemSettings).limit(1);
+    if (result.length === 0) {
+      const defaults = await db.insert(systemSettings).values({ minPreferences: 7 }).returning();
+      return defaults[0];
+    }
+    return result[0];
+  }
+
+  async updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
+    const current = await this.getSystemSettings();
+    const result = await db.update(systemSettings)
+      .set(settings)
+      .where(eq(systemSettings.id, current.id))
+      .returning();
+    return result[0];
   }
 }
 
