@@ -423,13 +423,6 @@ export default function AdminDashboard() {
         description: "Allocation removed successfully.",
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
-      toast({
-        title: "Success",
-        description: "Allocation removed successfully.",
-      });
-    },
   });
 
   const addSubjectMutation = useMutation({
