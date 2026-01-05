@@ -133,6 +133,8 @@ export async function registerRoutes(
         username: z.string().min(3),
         password: z.string().min(6),
         name: z.string().min(2),
+        email: z.string().email().optional().or(z.literal("")),
+        designation: z.string().optional(),
         role: z.literal("faculty").default("faculty"),
         seniority: z.number().optional().default(999),
       });

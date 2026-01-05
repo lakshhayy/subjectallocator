@@ -10,6 +10,8 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   role: text("role").notNull().default("faculty"), // "faculty" or "admin"
   seniority: integer("seniority").default(99), // Default seniority
+  email: text("email"),
+  designation: text("designation"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({

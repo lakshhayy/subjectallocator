@@ -102,6 +102,8 @@ const addUserSchema = z.object({
   name: z.string().min(2, "Name is required"),
   username: z.string().min(3, "Username must be at least 3 chars"),
   password: z.string().min(6, "Password must be at least 6 chars"),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  designation: z.string().optional(),
 });
 
 function FacultyManagement() {
@@ -111,7 +113,7 @@ function FacultyManagement() {
 
   const form = useForm<z.infer<typeof addUserSchema>>({
     resolver: zodResolver(addUserSchema),
-    defaultValues: { name: "", username: "", password: "" }
+    defaultValues: { name: "", username: "", password: "", email: "", designation: "" }
   });
 
   const { data: fetchedFaculty, refetch } = useQuery({
@@ -215,6 +217,12 @@ function FacultyManagement() {
                   <FormField control={form.control} name="password" render={({ field }) => (
                     <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl></FormItem>
                   )} />
+                  <FormField control={form.control} name="email" render={({ field }) => (
+                    <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="faculty@example.com" {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="designation" render={({ field }) => (
+                    <FormItem><FormLabel>Designation</FormLabel><FormControl><Input placeholder="e.g. Assistant Professor" {...field} /></FormControl></FormItem>
+                  )} />
                   <Button type="submit" className="w-full">Create Account</Button>
                 </form>
               </Form>
@@ -232,7 +240,8 @@ function FacultyManagement() {
                 <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab active:cursor-grabbing" />
                 <div className="flex-1">
                   <p className="font-medium">{f.name}</p>
-                  <p className="text-xs text-muted-foreground">@{f.username}</p>
+                  <p className="text-xs text-muted-foreground">{f.designation || "Faculty"} • @{f.username}</p>
+                  {f.email && <p className="text-xs text-muted-foreground">{f.email}</p>}
                 </div>
                 <div className="text-sm text-muted-foreground mr-4">
                   Rank: {f.seniority || "N/A"}
