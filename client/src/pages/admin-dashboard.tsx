@@ -92,7 +92,7 @@ interface Subject {
   type: string;
   credits: number;
   description: string;
-  capacity?: number;
+  sections?: number;
 }
 
 const SUBJECT_TYPES = ["Core", "Elective", "Lab", "Project", "Internship"];
@@ -266,7 +266,7 @@ export default function AdminDashboard() {
     type: "Core",
     credits: "4",
     description: "",
-    capacity: "1",
+    sections: "1",
   });
 
   const [minPreferences, setMinPreferences] = useState(7);
@@ -446,7 +446,7 @@ export default function AdminDashboard() {
         type: "Core",
         credits: "4",
         description: "",
-        capacity: "1",
+        sections: "1",
       });
       toast({
         title: "Success",
@@ -556,7 +556,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      capacity: parseInt(formData.capacity) || 1,
+      sections: parseInt(formData.sections) || 1,
     });
   };
 
@@ -568,7 +568,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      capacity: parseInt(formData.capacity) || 1,
+      sections: parseInt(formData.sections) || 1,
     });
   };
 
@@ -581,7 +581,7 @@ export default function AdminDashboard() {
       type: subject.type,
       credits: subject.credits.toString(),
       description: subject.description,
-      capacity: (subject.capacity || 1).toString(),
+      sections: (subject.sections || 1).toString(),
     });
     setIsEditDialogOpen(true);
   };
@@ -973,7 +973,7 @@ export default function AdminDashboard() {
                           <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
                             <span className="bg-primary/10 text-primary px-2 py-1 rounded">{subject.type}</span>
                             <span className="bg-muted px-2 py-1 rounded">{subject.credits} credits</span>
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Capacity: {subject.capacity || 1}</span>
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Sections: {subject.sections || 1}</span>
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">{subject.description}</p>
                         </div>
@@ -1075,15 +1075,15 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <Label htmlFor="capacity">Capacity (Sections)</Label>
+                <Label htmlFor="sections">Sections</Label>
                 <Input
-                  id="capacity"
+                  id="sections"
                   type="number"
                   min="1"
                   max="10"
                   placeholder="1"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                  value={formData.sections}
+                  onChange={(e) => setFormData({...formData, sections: e.target.value})}
                 />
               </div>
             </div>
@@ -1172,14 +1172,14 @@ export default function AdminDashboard() {
               />
             </div>
             <div>
-              <Label htmlFor="edit-capacity">Capacity (Sections)</Label>
+              <Label htmlFor="edit-sections">Sections</Label>
               <Input
-                id="edit-capacity"
+                id="edit-sections"
                 type="number"
                 min="1"
                 max="10"
-                value={formData.capacity}
-                onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                value={formData.sections}
+                onChange={(e) => setFormData({...formData, sections: e.target.value})}
               />
             </div>
             <div>

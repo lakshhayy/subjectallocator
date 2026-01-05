@@ -239,7 +239,6 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(facultyLoadHistory).where(eq(facultyLoadHistory.facultyId, facultyId));
   }
 
-  // FIXED SYNTAX ERROR HERE
   async calculateSubjectProbabilities(userId: string): Promise<any[]> {
     const allSubjects = await this.getAllSubjects();
     const allHistory = await this.getSubjectHistory();

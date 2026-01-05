@@ -27,8 +27,8 @@ export const subjects = pgTable("subjects", {
   type: text("type").notNull(), // "Core", "Elective", "Lab", "Project", "Internship"
   credits: integer("credits").notNull(),
   description: text("description").notNull(),
-  // NEW: Capacity controls how many faculty can take this subject (e.g., 3 for 3 Sections)
-  capacity: integer("capacity").notNull().default(1), 
+  // NEW: Sections controls how many faculty can take this subject (e.g., 3 for 3 Sections)
+  sections: integer("sections").notNull().default(1), 
 });
 
 export const insertSubjectSchema = createInsertSchema(subjects).omit({

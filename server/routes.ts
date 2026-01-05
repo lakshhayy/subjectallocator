@@ -209,7 +209,7 @@ export async function registerRoutes(
         type: z.string(),
         credits: z.number().int(),
         description: z.string(),
-        capacity: z.number().int().min(1).default(1),
+        sections: z.number().int().min(1).default(1),
       });
 
       const data = subjectSchema.parse(req.body);
@@ -230,7 +230,7 @@ export async function registerRoutes(
         type: z.string().optional(),
         credits: z.number().int().optional(),
         description: z.string().optional(),
-        capacity: z.number().int().min(1).optional(),
+        sections: z.number().int().min(1).optional(),
       });
 
       const data = subjectSchema.parse(req.body);
@@ -330,13 +330,13 @@ export async function registerRoutes(
       const newAllocations: any[] = [];
 
       // CALCULATE REMAINING SLOTS
-      // Capacity - Used = Available
+      // Sections - Used = Available
       const subjectAvailability = new Map<string, number>();
 
       allSubjects.forEach(s => {
         const usedSlots = existingAllocations.filter(a => a.subject.id === s.id).length;
-        // Default capacity to 1 if null (for legacy data)
-        const cap = s.capacity || 1; 
+        // Default sections to 1 if null (for legacy data)
+        const cap = s.sections || 1; 
         const remaining = Math.max(0, cap - usedSlots);
         subjectAvailability.set(s.id, remaining);
       });
@@ -538,11 +538,11 @@ export async function registerRoutes(
         return acc;
       }, {});
 
-      // Updated to use Capacity for "Unallocated" logic
-      // Unallocated = Subjects where Used Slots < Capacity
+      // Updated to use Sections for "Unallocated" logic
+      // Unallocated = Subjects where Used Slots < Sections
       const unallocatedSubjects = subjects.filter(subject => {
         const used = allocationsData.filter(a => a.subject.id === subject.id).length;
-        const cap = subject.capacity || 1;
+        const cap = subject.sections || 1;
         return used < cap;
       }).length;
 
