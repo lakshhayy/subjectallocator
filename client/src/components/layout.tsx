@@ -63,6 +63,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {user?.role === "admin" && location.startsWith("/admin") && (
+            <div className="pt-4 mt-4 border-t border-border space-y-1">
+              <p className="px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Dashboard Sections</p>
+              <div id="sidebar-tabs-portal"></div>
+            </div>
+          )}
         </nav>
 
         <div className="p-4 border-t border-border">

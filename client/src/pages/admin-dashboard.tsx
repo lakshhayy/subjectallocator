@@ -32,6 +32,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
 
+import { createPortal } from "react-dom";
+
 interface Analytics {
   totalSubjects: number;
   totalAllocations: number;
@@ -633,13 +635,34 @@ export default function AdminDashboard() {
             </div>
             
             <div className="flex flex-wrap items-center gap-4">
-              <TabsList className="bg-muted/50 p-1">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="faculty">Faculty</TabsTrigger>
-                <TabsTrigger value="subjects">Subjects</TabsTrigger>
-              </TabsList>
+              {document.getElementById("sidebar-tabs-portal") && createPortal(
+                <TabsList className="flex flex-col w-full h-auto bg-transparent p-0 gap-1">
+                  <TabsTrigger 
+                    value="overview" 
+                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Overview
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="faculty"
+                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
+                  >
+                    <Users className="h-4 w-4" />
+                    Faculty
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="subjects"
+                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Subjects
+                  </TabsTrigger>
+                </TabsList>,
+                document.getElementById("sidebar-tabs-portal")!
+              )}
 
-              <div className="flex flex-wrap gap-2 border-l pl-4 border-border">
+              <div className="flex flex-wrap gap-2">
                 <Button 
                   variant="outline"
                   onClick={downloadCSV}
