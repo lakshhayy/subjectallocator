@@ -360,8 +360,10 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: "Updated", description: "System settings updated successfully." });
+      queryClient.setQueryData(["admin-settings"], data);
+      setMinPreferences(data.minPreferences);
       queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
     },
     onError: () => toast({ title: "Error", description: "Failed to update settings", variant: "destructive" })
