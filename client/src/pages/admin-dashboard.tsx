@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search } from "lucide-react";
+import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search, LayoutGrid } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -641,22 +641,8 @@ export default function AdminDashboard() {
                     value="overview" 
                     className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
                   >
-                    <Settings className="h-4 w-4" />
+                    <LayoutGrid className="h-4 w-4" />
                     Overview
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="faculty"
-                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
-                  >
-                    <Users className="h-4 w-4" />
-                    Faculty
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="subjects"
-                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    Subjects
                   </TabsTrigger>
                 </TabsList>,
                 document.getElementById("sidebar-tabs-portal")!
@@ -702,330 +688,351 @@ export default function AdminDashboard() {
           </div>
 
           <TabsContent value="overview" className="space-y-4 mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="space-y-1">
-                  <CardTitle className="text-base font-semibold">System Configuration</CardTitle>
-                  <p className="text-sm text-muted-foreground">Global settings for the allocation algorithm</p>
-                </div>
-                <Settings className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="flex items-end gap-4 max-w-sm">
-                  <div className="grid gap-1.5 w-full">
-                    <Label htmlFor="minPrefs">Minimum Required Preferences (Faculty)</Label>
-                    <Input 
-                      id="minPrefs" 
-                      type="number" 
-                      min={3} 
-                      max={20}
-                      value={minPreferences}
-                      onChange={(e) => setMinPreferences(parseInt(e.target.value))}
-                    />
-                    <p className="text-[0.8rem] text-muted-foreground">
-                      Faculty must select at least this many subjects.
-                    </p>
-                  </div>
-                  <Button 
-                    variant="secondary"
-                    onClick={() => updateSettingsMutation.mutate(minPreferences)}
-                    disabled={updateSettingsMutation.isPending}
-                  >
-                    Save
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Subjects</CardTitle>
-                  <BookOpen className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalSubjects}</div>
-                  <p className="text-xs text-muted-foreground">Across all semesters</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Final Allotments</CardTitle>
-                  <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalAllocations}</div>
-                  <p className="text-xs text-muted-foreground">Processed by algorithm</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Faculty Submitted</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalFaculty}</div>
-                  <p className="text-xs text-muted-foreground">Have saved preferences</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Unallocated Subjects</CardTitle>
-                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-destructive">{analytics.unallocatedSubjects}</div>
-                  <p className="text-xs text-muted-foreground">Need allocation</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Faculty Selections (Live)</CardTitle>
-                <p className="text-sm text-muted-foreground">Real-time preferences submitted by faculty members (Pre-Allotment)</p>
-              </CardHeader>
-              <CardContent>
-                {analytics.facultyPreferences.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No selections made yet
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {analytics.facultyPreferences.filter(fp => fp.preferences.length > 0).map((fp) => (
-                      <div 
-                        key={fp.user.id} 
-                        className="border rounded-lg p-4"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h3 className="font-medium">{fp.user.name}</h3>
-                            <p className="text-sm text-muted-foreground">@{fp.user.username}</p>
-                          </div>
-                          <div className="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
-                            {fp.preferences.length} preferences saved
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {fp.preferences.map((subject, idx) => (
-                            <div 
-                              key={subject.id} 
-                              className="text-xs bg-muted border border-input px-2 py-1 rounded flex items-center gap-2"
-                            >
-                              <span className="font-bold text-primary">#{idx + 1}</span>
-                              <span>{subject.code}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Faculty Allocations (Final)</CardTitle>
-                <p className="text-sm text-muted-foreground">Subjects allotted by the algorithm</p>
-              </CardHeader>
-              <CardContent>
-                {analytics.facultyAllocations.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No allocations yet. Run the allotment round to process selections.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {analytics.facultyAllocations.map((allocation) => (
-                      <div 
-                        key={allocation.user.id} 
-                        className="border rounded-lg p-4"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h3 className="font-medium">{allocation.user.name}</h3>
-                            <p className="text-sm text-muted-foreground">@{allocation.user.username}</p>
-                          </div>
-                          <div className="text-sm font-medium bg-primary/10 text-primary px-3 py-1 rounded-full">
-                            {allocation.subjects.length} allotted
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {allocation.subjects.map((subject) => (
-                            <div 
-                              key={subject.id} 
-                              className="flex items-center justify-between text-sm bg-muted p-2 rounded"
-                            >
-                              <div>
-                                <span className="font-medium">{subject.code}</span> - {subject.name}
-                                <span className="text-muted-foreground ml-2">(Sem {subject.semester})</span>
-                              </div>
-                              {subject.allocationId && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                  onClick={() => {
-                                    if(confirm("Unallot this subject?")) {
-                                      deleteAllocationMutation.mutate(subject.allocationId);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Subject-wise Faculty Mapping (Final)</CardTitle>
-                <p className="text-sm text-muted-foreground">Which faculty members are allotted to each subject</p>
-              </CardHeader>
-              <CardContent>
-                {analytics.subjectAllocations.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No allocations yet
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {analytics.subjectAllocations.map((allocation) => (
-                      <div 
-                        key={allocation.subject.id} 
-                        className="border rounded-lg p-4"
-                      >
-                        <div className="mb-3">
-                          <h3 className="font-medium">{allocation.subject.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {allocation.subject.code} • Semester {allocation.subject.semester} • {allocation.faculty.length} faculty
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {allocation.faculty.map((faculty) => (
-                            <div 
-                              key={faculty.id} 
-                              className="text-sm bg-primary/10 text-primary px-3 py-1 rounded-full"
-                            >
-                              {faculty.name}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="faculty">
-             <FacultyManagement />
-          </TabsContent>
-
-          <TabsContent value="subjects">
-            <Card>
-              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <CardTitle>Subject Management</CardTitle>
-                  <p className="text-sm text-muted-foreground">Add, edit, or remove subjects</p>
-                </div>
-                <Button onClick={() => setIsAddDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" /> Add Subject
-                </Button>
-              </CardHeader>
-
-              <div className="px-6 pb-2">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name or code..."
-                      className="pl-9"
-                      value={subjectSearch}
-                      onChange={(e) => setSubjectSearch(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="w-full sm:w-[180px]">
-                    <Select value={subjectSemesterFilter} onValueChange={setSubjectSemesterFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Filter by Semester" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Semesters</SelectItem>
-                        {SEMESTERS.map(s => (
-                          <SelectItem key={s} value={s.toString()}>Semester {s}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+            <Tabs defaultValue="stats" className="w-full">
+              <div className="mb-6 flex justify-center">
+                <TabsList className="bg-muted/50 p-1">
+                  <TabsTrigger value="stats" className="gap-2">
+                    <LayoutGrid className="h-4 w-4" />
+                    Statistics
+                  </TabsTrigger>
+                  <TabsTrigger value="faculty" className="gap-2">
+                    <Users className="h-4 w-4" />
+                    Faculty
+                  </TabsTrigger>
+                  <TabsTrigger value="subjects" className="gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    Subjects
+                  </TabsTrigger>
+                </TabsList>
               </div>
 
-              <CardContent>
-                {filteredSubjects.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {subjectsList.length === 0 
-                      ? "No subjects yet. Click \"Add Subject\" to create one."
-                      : "No subjects match your filters."}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filteredSubjects.map((subject) => (
-                      <div 
-                        key={subject.id} 
-                        className="border rounded-lg p-4 flex items-start justify-between"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-baseline gap-2">
-                            <h3 className="font-semibold">{subject.code}</h3>
-                            <p className="text-sm text-muted-foreground">Semester {subject.semester}</p>
-                          </div>
-                          <p className="text-sm mt-1">{subject.name}</p>
-                          <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
-                            <span className="bg-primary/10 text-primary px-2 py-1 rounded">{subject.type}</span>
-                            <span className="bg-muted px-2 py-1 rounded">{subject.credits} credits</span>
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Sections: {subject.sections || 1}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-2">{subject.description}</p>
-                        </div>
-                        <div className="flex gap-2 ml-4">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(subject)}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:bg-destructive/10"
-                            onClick={() => {
-                              if (confirm("Are you sure you want to delete this subject?")) {
-                                deleteSubjectMutation.mutate(subject.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+              <TabsContent value="stats" className="space-y-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="space-y-1">
+                      <CardTitle className="text-base font-semibold">System Configuration</CardTitle>
+                      <p className="text-sm text-muted-foreground">Global settings for the allocation algorithm</p>
+                    </div>
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="flex items-end gap-4 max-w-sm">
+                      <div className="grid gap-1.5 w-full">
+                        <Label htmlFor="minPrefs">Minimum Required Preferences (Faculty)</Label>
+                        <Input 
+                          id="minPrefs" 
+                          type="number" 
+                          min={3} 
+                          max={20}
+                          value={minPreferences}
+                          onChange={(e) => setMinPreferences(parseInt(e.target.value))}
+                        />
+                        <p className="text-[0.8rem] text-muted-foreground">
+                          Faculty must select at least this many subjects.
+                        </p>
                       </div>
-                    ))}
+                      <Button 
+                        variant="secondary"
+                        onClick={() => updateSettingsMutation.mutate(minPreferences)}
+                        disabled={updateSettingsMutation.isPending}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Subjects</CardTitle>
+                      <BookOpen className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analytics.totalSubjects}</div>
+                      <p className="text-xs text-muted-foreground">Across all semesters</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Final Allotments</CardTitle>
+                      <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analytics.totalAllocations}</div>
+                      <p className="text-xs text-muted-foreground">Processed by algorithm</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Faculty Submitted</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analytics.totalFaculty}</div>
+                      <p className="text-xs text-muted-foreground">Have saved preferences</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Unallocated Subjects</CardTitle>
+                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-destructive">{analytics.unallocatedSubjects}</div>
+                      <p className="text-xs text-muted-foreground">Need allocation</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Current Faculty Selections (Live)</CardTitle>
+                    <p className="text-sm text-muted-foreground">Real-time preferences submitted by faculty members (Pre-Allotment)</p>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.facultyPreferences.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No selections made yet
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {analytics.facultyPreferences.filter(fp => fp.preferences.length > 0).map((fp) => (
+                          <div 
+                            key={fp.user.id} 
+                            className="border rounded-lg p-4"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <h3 className="font-medium">{fp.user.name}</h3>
+                                <p className="text-sm text-muted-foreground">@{fp.user.username}</p>
+                              </div>
+                              <div className="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                                {fp.preferences.length} preferences saved
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {fp.preferences.map((subject, idx) => (
+                                <div 
+                                  key={subject.id} 
+                                  className="text-xs bg-muted border border-input px-2 py-1 rounded flex items-center gap-2"
+                                >
+                                  <span className="font-bold text-primary">#{idx + 1}</span>
+                                  <span>{subject.code}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Faculty Allocations (Final)</CardTitle>
+                    <p className="text-sm text-muted-foreground">Subjects allotted by the algorithm</p>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.facultyAllocations.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No allocations yet. Run the allotment round to process selections.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {analytics.facultyAllocations.map((allocation) => (
+                          <div 
+                            key={allocation.user.id} 
+                            className="border rounded-lg p-4"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <h3 className="font-medium">{allocation.user.name}</h3>
+                                <p className="text-sm text-muted-foreground">@{allocation.user.username}</p>
+                              </div>
+                              <div className="text-sm font-medium bg-primary/10 text-primary px-3 py-1 rounded-full">
+                                {allocation.subjects.length} allotted
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {allocation.subjects.map((subject) => (
+                                <div 
+                                  key={subject.id} 
+                                  className="flex items-center justify-between text-sm bg-muted p-2 rounded"
+                                >
+                                  <div>
+                                    <span className="font-medium">{subject.code}</span> - {subject.name}
+                                    <span className="text-muted-foreground ml-2">(Sem {subject.semester})</span>
+                                  </div>
+                                  {subject.allocationId && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                      onClick={() => {
+                                        if(confirm("Unallot this subject?")) {
+                                          deleteAllocationMutation.mutate(subject.allocationId);
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Subject-wise Faculty Mapping (Final)</CardTitle>
+                    <p className="text-sm text-muted-foreground">Which faculty members are allotted to each subject</p>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.subjectAllocations.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No allocations yet
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {analytics.subjectAllocations.map((allocation) => (
+                          <div 
+                            key={allocation.subject.id} 
+                            className="border rounded-lg p-4"
+                          >
+                            <div className="mb-3">
+                              <h3 className="font-medium">{allocation.subject.name}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {allocation.subject.code} • Semester {allocation.subject.semester} • {allocation.faculty.length} faculty
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {allocation.faculty.map((faculty) => (
+                                <div 
+                                  key={faculty.id} 
+                                  className="text-sm bg-primary/10 text-primary px-3 py-1 rounded-full"
+                                >
+                                  {faculty.name}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="faculty">
+                <FacultyManagement />
+              </TabsContent>
+
+              <TabsContent value="subjects">
+                <Card>
+                  <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle>Subject Management</CardTitle>
+                      <p className="text-sm text-muted-foreground">Add, edit, or remove subjects</p>
+                    </div>
+                    <Button onClick={() => setIsAddDialogOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" /> Add Subject
+                    </Button>
+                  </CardHeader>
+
+                  <div className="px-6 pb-2">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search by name or code..."
+                          className="pl-9"
+                          value={subjectSearch}
+                          onChange={(e) => setSubjectSearch(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="w-full sm:w-[180px]">
+                        <Select value={subjectSemesterFilter} onValueChange={setSubjectSemesterFilter}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Filter by Semester" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Semesters</SelectItem>
+                            {SEMESTERS.map(s => (
+                              <SelectItem key={s} value={s.toString()}>Semester {s}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  <CardContent>
+                    {filteredSubjects.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        {subjectsList.length === 0 
+                          ? "No subjects yet. Click \"Add Subject\" to create one."
+                          : "No subjects match your filters."}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredSubjects.map((subject) => (
+                          <div 
+                            key={subject.id} 
+                            className="border rounded-lg p-4 flex items-start justify-between"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-baseline gap-2">
+                                <h3 className="font-semibold">{subject.code}</h3>
+                                <p className="text-sm text-muted-foreground">Semester {subject.semester}</p>
+                              </div>
+                              <p className="text-sm mt-1">{subject.name}</p>
+                              <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
+                                <span className="bg-primary/10 text-primary px-2 py-1 rounded">{subject.type}</span>
+                                <span className="bg-muted px-2 py-1 rounded">{subject.credits} credits</span>
+                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Sections: {subject.sections || 1}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-2">{subject.description}</p>
+                            </div>
+                            <div className="flex gap-2 ml-4">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEditDialog(subject)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:bg-destructive/10"
+                                onClick={() => {
+                                  if (confirm("Are you sure you want to delete this subject?")) {
+                                    deleteSubjectMutation.mutate(subject.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       </div>
