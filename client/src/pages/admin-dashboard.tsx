@@ -625,59 +625,60 @@ export default function AdminDashboard() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-serif font-bold text-foreground">Admin Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Manage subjects, allocations and faculty</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-
-            <Button 
-              variant="outline"
-              onClick={downloadCSV}
-              className="flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Download Report
-            </Button>
-
-            <Button 
-              variant="outline"
-              onClick={() => {
-                if(confirm("Are you sure you want to reset ALL faculty preferences and allotments? This will start a completely fresh round.")) {
-                  resetSystemMutation.mutate();
-                }
-              }}
-              disabled={resetSystemMutation.isPending}
-              className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset All
-            </Button>
-            <Button 
-              onClick={() => runAllotmentMutation.mutate()} 
-              disabled={runAllotmentMutation.isPending}
-              className="flex items-center gap-2"
-            >
-              <Play className="h-4 w-4" />
-              {runAllotmentMutation.isPending 
-                ? "Running..." 
-                : analytics?.totalAllocations === 0 
-                  ? "Run Round 1" 
-                  : "Run Round 2"}
-            </Button>
-          </div>
-        </div>
-
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList>
-            <TabsTrigger value="overview">Overview & Analytics</TabsTrigger>
-            <TabsTrigger value="faculty">Faculty Management</TabsTrigger>
-            <TabsTrigger value="subjects">Subject Management</TabsTrigger>
-          </TabsList>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-serif font-bold text-foreground">Admin Dashboard</h1>
+              <p className="text-muted-foreground mt-1">Manage subjects, allocations and faculty</p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-4">
+              <TabsList className="bg-muted/50 p-1">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="faculty">Faculty</TabsTrigger>
+                <TabsTrigger value="subjects">Subjects</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="overview" className="space-y-4 mt-4">
-            {/* ... Overview Content ... */}
+              <div className="flex flex-wrap gap-2 border-l pl-4 border-border">
+                <Button 
+                  variant="outline"
+                  onClick={downloadCSV}
+                  className="flex items-center gap-2 h-9"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Report
+                </Button>
+
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    if(confirm("Are you sure you want to reset ALL faculty preferences and allotments? This will start a completely fresh round.")) {
+                      resetSystemMutation.mutate();
+                    }
+                  }}
+                  disabled={resetSystemMutation.isPending}
+                  className="flex items-center gap-2 h-9 border-destructive text-destructive hover:bg-destructive hover:text-white"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reset All
+                </Button>
+                <Button 
+                  onClick={() => runAllotmentMutation.mutate()} 
+                  disabled={runAllotmentMutation.isPending}
+                  className="flex items-center gap-2 h-9"
+                >
+                  <Play className="h-4 w-4" />
+                  {runAllotmentMutation.isPending 
+                    ? "Running..." 
+                    : analytics?.totalAllocations === 0 
+                      ? "Run Round 1" 
+                      : "Run Round 2"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <TabsContent value="overview" className="space-y-4 mt-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="space-y-1">
@@ -713,54 +714,52 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card data-testid="card-total-subjects">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Subjects</CardTitle>
                   <BookOpen className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-total-subjects">{analytics.totalSubjects}</div>
+                  <div className="text-2xl font-bold">{analytics.totalSubjects}</div>
                   <p className="text-xs text-muted-foreground">Across all semesters</p>
                 </CardContent>
               </Card>
 
-              <Card data-testid="card-total-allocations">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Final Allotments</CardTitle>
                   <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-total-allocations">{analytics.totalAllocations}</div>
+                  <div className="text-2xl font-bold">{analytics.totalAllocations}</div>
                   <p className="text-xs text-muted-foreground">Processed by algorithm</p>
                 </CardContent>
               </Card>
 
-              <Card data-testid="card-faculty-participated">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Faculty Submitted</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-faculty-participated">{analytics.totalFaculty}</div>
+                  <div className="text-2xl font-bold">{analytics.totalFaculty}</div>
                   <p className="text-xs text-muted-foreground">Have saved preferences</p>
                 </CardContent>
               </Card>
 
-              <Card data-testid="card-unallocated">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Unallocated Subjects</CardTitle>
                   <AlertCircle className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-destructive" data-testid="text-unallocated">{analytics.unallocatedSubjects}</div>
+                  <div className="text-2xl font-bold text-destructive">{analytics.unallocatedSubjects}</div>
                   <p className="text-xs text-muted-foreground">Need allocation</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Live Faculty Selections */}
             <Card>
               <CardHeader>
                 <CardTitle>Current Faculty Selections (Live)</CardTitle>
@@ -805,7 +804,6 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Faculty Allocations */}
             <Card>
               <CardHeader>
                 <CardTitle>Faculty Allocations (Final)</CardTitle>
@@ -822,7 +820,6 @@ export default function AdminDashboard() {
                       <div 
                         key={allocation.user.id} 
                         className="border rounded-lg p-4"
-                        data-testid={`faculty-allocation-${allocation.user.id}`}
                       >
                         <div className="flex items-center justify-between mb-3">
                           <div>
@@ -838,7 +835,6 @@ export default function AdminDashboard() {
                             <div 
                               key={subject.id} 
                               className="flex items-center justify-between text-sm bg-muted p-2 rounded"
-                              data-testid={`subject-${subject.id}`}
                             >
                               <div>
                                 <span className="font-medium">{subject.code}</span> - {subject.name}
@@ -868,7 +864,6 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Subject wise Mapping */}
             <Card>
               <CardHeader>
                 <CardTitle>Subject-wise Faculty Mapping (Final)</CardTitle>
@@ -885,7 +880,6 @@ export default function AdminDashboard() {
                       <div 
                         key={allocation.subject.id} 
                         className="border rounded-lg p-4"
-                        data-testid={`subject-allocation-${allocation.subject.id}`}
                       >
                         <div className="mb-3">
                           <h3 className="font-medium">{allocation.subject.name}</h3>
@@ -898,7 +892,6 @@ export default function AdminDashboard() {
                             <div 
                               key={faculty.id} 
                               className="text-sm bg-primary/10 text-primary px-3 py-1 rounded-full"
-                              data-testid={`faculty-${faculty.id}`}
                             >
                               {faculty.name}
                             </div>
@@ -917,7 +910,6 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="subjects">
-            {/* Subject Management */}
             <Card>
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -931,7 +923,6 @@ export default function AdminDashboard() {
 
               <div className="px-6 pb-2">
                 <div className="flex flex-col sm:flex-row gap-4">
-                  {/* SEARCH BAR */}
                   <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -942,7 +933,6 @@ export default function AdminDashboard() {
                     />
                   </div>
 
-                  {/* SEMESTER FILTER DROPDOWN */}
                   <div className="w-full sm:w-[180px]">
                     <Select value={subjectSemesterFilter} onValueChange={setSubjectSemesterFilter}>
                       <SelectTrigger>
@@ -1017,7 +1007,6 @@ export default function AdminDashboard() {
         </Tabs>
       </div>
 
-      {/* Add Subject Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1115,7 +1104,6 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Subject Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1169,27 +1157,29 @@ export default function AdminDashboard() {
                 </Select>
               </div>
             </div>
-            <div>
-              <Label htmlFor="edit-credits">Credits</Label>
-              <Input
-                id="edit-credits"
-                type="number"
-                min="1"
-                max="10"
-                value={formData.credits}
-                onChange={(e) => setFormData({...formData, credits: e.target.value})}
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-sections">Sections</Label>
-              <Input
-                id="edit-sections"
-                type="number"
-                min="1"
-                max="10"
-                value={formData.sections}
-                onChange={(e) => setFormData({...formData, sections: e.target.value})}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-credits">Credits</Label>
+                <Input
+                  id="edit-credits"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.credits}
+                  onChange={(e) => setFormData({...formData, credits: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-sections">Sections</Label>
+                <Input
+                  id="edit-sections"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.sections}
+                  onChange={(e) => setFormData({...formData, sections: e.target.value})}
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="edit-description">Description</Label>
