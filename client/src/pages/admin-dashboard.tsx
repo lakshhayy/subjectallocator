@@ -590,26 +590,21 @@ export default function AdminDashboard() {
     },
   });
 
-  const { data: analytics, isLoading } = useQuery<Analytics>({
+  const { data: analytics, isLoading, error } = useQuery<Analytics>({
     queryKey: ["admin-analytics"],
     queryFn: async () => {
       const response = await fetch("/api/admin/analytics", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch analytics");
-      const data = await response.json();
-
-      const enhancedData = {
-        ...data,
-        facultyAllocations: data.facultyAllocations.map((fa: any) => ({
-          ...fa,
-          subjects: fa.subjects.map((s: any) => ({
-            ...s,
-            allocationId: data.rawAllocations?.find((a: any) => a.userId === fa.user.id && a.subjectId === s.id)?.id
-          }))
-        }))
-      };
-      return enhancedData;
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = "/login";
+          throw new Error("Unauthorized");
+        }
+        throw new Error("Failed to fetch analytics");
+      }
+      return response.json();
     },
     enabled: user?.role === "admin",
+    retry: 1,
   });
 
   const { data: subjectsList = [] } = useQuery<Subject[]>({

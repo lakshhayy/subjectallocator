@@ -62,11 +62,12 @@ app.use(
       checkPeriod: 86400000 // prune expired entries every 24h
     }),
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Only send over HTTPS in production
-      httpOnly: true, // NEW: Prevents JavaScript (XSS) from reading the cookie
-      maxAge: 1000 * 60 * 60 * 24, // 24 hours
-      sameSite: "strict", // NEW: Prevents CSRF attacks (Strict is best for internal tools)
+      secure: false, 
+      httpOnly: true, 
+      maxAge: 1000 * 60 * 60 * 24, 
+      sameSite: "lax",
     },
+    proxy: true,
   })
 );
 

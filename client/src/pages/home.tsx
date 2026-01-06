@@ -4,17 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { BookOpen, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function Home() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    if (user?.role === "admin") {
+    if (user?.role === "admin" && !isRedirecting) {
+      setIsRedirecting(true);
       setLocation("/admin");
     }
-  }, [user, setLocation]);
+  }, [user, setLocation, isRedirecting]);
+
+  if (isRedirecting) return null;
 
   return (
     <Layout>

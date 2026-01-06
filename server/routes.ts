@@ -18,7 +18,8 @@ function requireAuth(req: any, res: any, next: any) {
 
 // Middleware to check if user is admin
 function requireAdmin(req: any, res: any, next: any) {
-  if (!req.session.user || req.session.user.role !== "admin") {
+  const user = req.session.user;
+  if (!user || user.role !== "admin") {
     return res.status(403).json({ message: "Forbidden: Admin access required" });
   }
   next();
