@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import createMemoryStore from "memorystore"; // NEW: Better session store for production
+import createMemoryStore from "memorystore";
+import rateLimit from "express-rate-limit"; // NEW: Import rate-limit
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -8,7 +9,26 @@ import type { User } from "@shared/schema";
 
 const app = express();
 const httpServer = createServer(app);
-const MemoryStore = createMemoryStore(session); // NEW: Initialize MemoryStore
+const MemoryStore = createMemoryStore(session);
+
+// NEW: Rate Limiting Implementation
+// 100 requests per 15 minutes for most routes
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { message: "Too many requests, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter rate limiting for authentication (Login)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10, // Max 10 attempts per 15 mins
+  message: { message: "Too many login attempts, please try again after 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 declare module "express-session" {
   interface SessionData {
@@ -25,6 +45,11 @@ declare module "http" {
 
 // NEW: Trust the reverse proxy (Required for secure cookies on Replit/Cloud)
 app.set("trust proxy", 1); 
+
+// Apply rate limiting to all API routes
+app.use("/api/", generalLimiter);
+// Apply stricter rate limiting to auth routes
+app.use("/api/auth/login", authLimiter);
 
 // Session configuration
 app.use(

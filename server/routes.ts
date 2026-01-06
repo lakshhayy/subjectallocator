@@ -5,7 +5,8 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { storage } from "./storage";
 import { z } from "zod";
 import { db } from "./db";
-import bcrypt from "bcrypt"; // NEW: Ensure bcrypt is imported
+import bcrypt from "bcrypt"; 
+import rateLimit from "express-rate-limit"; // NEW: Import Rate Limit
 
 // Middleware to check if user is authenticated
 function requireAuth(req: any, res: any, next: any) {
@@ -23,6 +24,18 @@ function requireAdmin(req: any, res: any, next: any) {
   next();
 }
 
+// NEW: Rate Limiter Configuration
+// Allows 5 requests per 1 minute
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // Limit each IP to 5 login requests per window
+  message: { message: "Too many login attempts, please try again after 60 seconds." },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Replit/Proxies need this to identify IPs correctly (relies on trust proxy setting in index.ts)
+  keyGenerator: (req) => req.ip || "unknown", 
+});
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -31,7 +44,8 @@ export async function registerRoutes(
   // ============ AUTH ROUTES ============
 
   // Login
-  app.post("/api/auth/login", async (req, res) => {
+  // NEW: Added 'loginLimiter' middleware here
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
       const loginSchema = z.object({
         username: z.string(),
@@ -42,25 +56,22 @@ export async function registerRoutes(
 
       const user = await storage.getUserByUsername(username);
 
-      // NEW: Secure Password Comparison using bcrypt
-      // OLD: if (!user || user.password !== password)
+      // Secure Password Comparison
       if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // NEW: Session Regeneration to prevent "Session Fixation" attacks
+      // Session Regeneration (Anti-Fixation)
       req.session.regenerate((err) => {
         if (err) {
           return res.status(500).json({ message: "Failed to create session" });
         }
 
-        // Set user data in the NEW session
         req.session.userId = user.id;
         req.session.user = user;
 
         const { password: _, ...userWithoutPassword } = user;
 
-        // Explicitly save to ensure cookie is sent
         req.session.save((err) => {
           if (err) {
              return res.status(500).json({ message: "Failed to save session" });
@@ -102,7 +113,6 @@ export async function registerRoutes(
 
   // ============ SYSTEM SETTINGS ROUTES ============
 
-  // Get system settings (Accessible by ALL authenticated users)
   app.get("/api/settings", requireAuth, async (req, res) => {
     try {
       const settings = await storage.getSystemSettings();
@@ -112,7 +122,6 @@ export async function registerRoutes(
     }
   });
 
-  // Update system settings (Admin only)
   app.put("/api/admin/settings", requireAdmin, async (req, res) => {
     try {
       const schema = z.object({
@@ -159,10 +168,9 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      // NEW: Hash password before creating user
+      // Hash password before creating user
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
-      // Create user with hashed password
       const user = await storage.createUser({
         ...data,
         password: hashedPassword,
@@ -204,7 +212,6 @@ export async function registerRoutes(
   app.get("/api/subjects", requireAuth, async (req, res) => {
     try {
       const subjects = await storage.getAllSubjects();
-      // Only show valid semesters
       const filteredSubjects = subjects.filter(s => s.semester >= 1);
       return res.json(filteredSubjects);
     } catch (error) {
@@ -222,7 +229,6 @@ export async function registerRoutes(
     }
   });
 
-  // CREATE Subject (With Capacity)
   app.post("/api/admin/subjects", requireAdmin, async (req, res) => {
     try {
       const subjectSchema = z.object({
@@ -243,7 +249,6 @@ export async function registerRoutes(
     }
   });
 
-  // UPDATE Subject (With Capacity)
   app.put("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
     try {
       const subjectSchema = z.object({
@@ -286,7 +291,6 @@ export async function registerRoutes(
 
   app.post("/api/preferences", requireAuth, async (req, res) => {
     try {
-      // PREVENT ADMIN FROM SAVING PREFERENCES
       if (req.session.user?.role === "admin") {
         return res.status(403).json({ message: "Admins cannot select subjects or save preferences." });
       }
@@ -297,8 +301,6 @@ export async function registerRoutes(
       }));
 
       const prefs = prefSchema.parse(req.body);
-
-      // Fetch dynamic settings
       const settings = await storage.getSystemSettings();
       const minRequired = settings.minPreferences;
 
@@ -335,7 +337,6 @@ export async function registerRoutes(
     }
   });
 
-  // ALLOTMENT ALGORITHM (CAPACITY AWARE)
   app.post("/api/admin/run-allotment", requireAdmin, async (req, res) => {
     try {
       const allUsers = await db.select().from(users);
@@ -347,18 +348,18 @@ export async function registerRoutes(
         .sort((a, b) => {
           const seniorityA = Number(a.seniority) || 999;
           const seniorityB = Number(b.seniority) || 999;
-          return seniorityA - seniorityB;
+
+          if (seniorityA !== seniorityB) {
+            return seniorityA - seniorityB;
+          }
+          return a.username.localeCompare(b.username);
         });
 
       const newAllocations: any[] = [];
-
-      // CALCULATE REMAINING SLOTS
-      // Sections - Used = Available
       const subjectAvailability = new Map<string, number>();
 
       allSubjects.forEach(s => {
         const usedSlots = existingAllocations.filter(a => a.subject.id === s.id).length;
-        // Default sections to 1 if null (for legacy data)
         const cap = s.sections || 1; 
         const remaining = Math.max(0, cap - usedSlots);
         subjectAvailability.set(s.id, remaining);
@@ -371,41 +372,26 @@ export async function registerRoutes(
         const currentFacultyAllocations = existingAllocations.filter(a => a.user.id === faculty.id);
         const currentCount = currentFacultyAllocations.length;
 
-        // Strict Check: Max 2 subjects per faculty
         if (currentCount >= 2) {
           console.log(`Skipping ${faculty.username}: Already has ${currentCount} subjects.`);
           continue;
         }
 
         const prefs = await storage.getUserPreferences(faculty.id);
-        console.log(`Processing ${faculty.username} (Has: ${currentCount}, Prefs: ${prefs.length})`);
 
         for (const pref of prefs) {
-          // Rule 1: Cannot have same subject twice (even if sections open)
           const isSubjectTakenByThisFaculty = currentFacultyAllocations.some(a => a.subject.id === pref.subjectId);
-
-          // Rule 2: Are slots available?
           const slotsLeft = subjectAvailability.get(pref.subjectId) || 0;
 
-          if (isSubjectTakenByThisFaculty) {
-             console.log(`  - Skip ${pref.subject.code}: Already assigned to self.`);
-             continue;
-          }
+          if (isSubjectTakenByThisFaculty) continue;
+          if (slotsLeft <= 0) continue;
 
-          if (slotsLeft <= 0) {
-             console.log(`  - Skip ${pref.subject.code}: No capacity left.`);
-             continue;
-          }
-
-          // ALLOT IT
           newAllocations.push({
             userId: faculty.id,
             subjectId: pref.subjectId,
           });
 
-          // Decrement Slot
           subjectAvailability.set(pref.subjectId, slotsLeft - 1);
-          console.log(`  >>> ALLOTTED: ${pref.subject.code} to ${faculty.username} (Slots Left: ${slotsLeft - 1})`);
           break; 
         }
       }
@@ -445,7 +431,6 @@ export async function registerRoutes(
 
   app.post("/api/allocations", requireAuth, async (req, res) => {
     try {
-      // PREVENT ADMIN FROM DIRECTLY SELECTING SUBJECTS
       if (req.session.user?.role === "admin") {
         return res.status(403).json({ message: "Admins cannot select subjects." });
       }
@@ -561,8 +546,6 @@ export async function registerRoutes(
         return acc;
       }, {});
 
-      // Updated to use Sections for "Unallocated" logic
-      // Unallocated = Subjects where Used Slots < Sections
       const unallocatedSubjects = subjects.filter(subject => {
         const used = allocationsData.filter(a => a.subject.id === subject.id).length;
         const cap = subject.sections || 1;
