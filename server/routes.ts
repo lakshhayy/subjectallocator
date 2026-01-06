@@ -5,8 +5,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { storage } from "./storage";
 import { z } from "zod";
 import { db } from "./db";
-import bcrypt from "bcrypt";
- // Ensure you have installed bcrypt as discussed
+import bcrypt from "bcrypt"; // NEW: Ensure bcrypt is imported
 
 // Middleware to check if user is authenticated
 function requireAuth(req: any, res: any, next: any) {
@@ -43,21 +42,33 @@ export async function registerRoutes(
 
       const user = await storage.getUserByUsername(username);
 
-      // SECURITY FIX: Using simple comparison for now as per previous code, 
-      // but strictly recommendation is bcrypt (commented out below for drop-in compatibility if not installed yet)
-      // if (!user || !await bcrypt.compare(password, user.password)) {
-      // NEW (SECURE)
-      // compare(plainText, hash) returns true if they match
+      // NEW: Secure Password Comparison using bcrypt
+      // OLD: if (!user || user.password !== password)
       if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Set session
-      req.session.userId = user.id;
-      req.session.user = user;
+      // NEW: Session Regeneration to prevent "Session Fixation" attacks
+      req.session.regenerate((err) => {
+        if (err) {
+          return res.status(500).json({ message: "Failed to create session" });
+        }
 
-      const { password: _, ...userWithoutPassword } = user;
-      return res.json({ user: userWithoutPassword });
+        // Set user data in the NEW session
+        req.session.userId = user.id;
+        req.session.user = user;
+
+        const { password: _, ...userWithoutPassword } = user;
+
+        // Explicitly save to ensure cookie is sent
+        req.session.save((err) => {
+          if (err) {
+             return res.status(500).json({ message: "Failed to save session" });
+          }
+          return res.json({ user: userWithoutPassword });
+        });
+      });
+
     } catch (error) {
       return res.status(400).json({ message: "Invalid request" });
     }
@@ -148,17 +159,15 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      // Note: In production, hash password here before creating
-      // OLD
-      // const user = await storage.createUser(data);
+      // NEW: Hash password before creating user
+      const hashedPassword = await bcrypt.hash(data.password, 10);
 
-      // NEW
-      const hashedPassword = await bcrypt.hash(data.password, 10); // 10 is the           salt rounds
-
+      // Create user with hashed password
       const user = await storage.createUser({
         ...data,
-        password: hashedPassword, // Save the hash, not the plain text
+        password: hashedPassword,
       });
+
       const { password, ...safeUser } = user;
       return res.json(safeUser);
     } catch (error) {

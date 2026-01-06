@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import createMemoryStore from "memorystore"; // NEW: Better session store for production
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -7,6 +8,7 @@ import type { User } from "@shared/schema";
 
 const app = express();
 const httpServer = createServer(app);
+const MemoryStore = createMemoryStore(session); // NEW: Initialize MemoryStore
 
 declare module "express-session" {
   interface SessionData {
@@ -21,16 +23,24 @@ declare module "http" {
   }
 }
 
+// NEW: Trust the reverse proxy (Required for secure cookies on Replit/Cloud)
+app.set("trust proxy", 1); 
+
 // Session configuration
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "manit-subject-allotment-secret-key",
     resave: false,
     saveUninitialized: false,
+    // NEW: Use MemoryStore to prevent memory leaks in production
+    store: new MemoryStore({
+      checkPeriod: 86400000 // prune expired entries every 24h
+    }),
     cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Only send over HTTPS in production
+      httpOnly: true, // NEW: Prevents JavaScript (XSS) from reading the cookie
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
+      sameSite: "strict", // NEW: Prevents CSRF attacks (Strict is best for internal tools)
     },
   })
 );
@@ -93,9 +103,6 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -103,10 +110,6 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {
