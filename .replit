@@ -1,9 +1,10 @@
-modules = ["nodejs-20", "web", "postgresql-16"]
-[agent]
-expertMode = true
-
+modules = ["nodejs-22"]
 [nix]
 channel = "stable-25_05"
+packages = ["unzip"]
+
+[agent]
+expertMode = true
 
 [workflows]
 runButton = "Project"
@@ -15,10 +16,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
+args = "Run Application"
 
 [[workflows.workflow]]
-name = "Start application"
+name = "Run Application"
 author = "agent"
 
 [[workflows.workflow.tasks]]
@@ -32,8 +33,3 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[deployment]
-deploymentTarget = "autoscale"
-run = ["npm", "run", "start"]
-build = ["npm", "run", "build"]
