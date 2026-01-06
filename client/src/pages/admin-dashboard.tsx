@@ -93,7 +93,7 @@ interface Subject {
   type: string;
   credits: number;
   description: string;
-  capacity?: number;
+  sections: number;
 }
 
 const SUBJECT_TYPES = ["Core", "Elective", "Lab", "Project", "Internship"];
@@ -397,7 +397,7 @@ export default function AdminDashboard() {
             type: parts[3].trim(),
             credits: parseInt(parts[4].trim()) || 3,
             description: parts[5]?.trim() || "",
-            capacity: parseInt(parts[6]?.trim()) || 1,
+            sections: parseInt(parts[6]?.trim()) || 1,
           });
         }
       }
@@ -650,7 +650,7 @@ export default function AdminDashboard() {
       type: subject.type,
       credits: subject.credits.toString(),
       description: subject.description,
-      capacity: (subject.capacity || 1).toString(),
+      capacity: (subject.sections || 1).toString(),
     });
     setIsEditDialogOpen(true);
   };
@@ -1063,7 +1063,7 @@ export default function AdminDashboard() {
                           <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
                             <span className="bg-primary/10 text-primary px-2 py-1 rounded">{subject.type}</span>
                             <span className="bg-muted px-2 py-1 rounded">{subject.credits} credits</span>
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Capacity: {subject.capacity || 1}</span>
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Capacity: {subject.sections || 1}</span>
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">{subject.description}</p>
                         </div>

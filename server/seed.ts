@@ -48,6 +48,7 @@ async function seed() {
       type: subject.type,
       credits: subject.credits,
       description: subject.description,
+      sections: (subject as any).capacity || 1,
     }));
 
     await db.insert(subjects).values(subjectsToInsert).onConflictDoNothing();

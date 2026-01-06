@@ -24,6 +24,7 @@ interface Subject {
   type: "Core" | "Elective" | "Lab" | "Project" | "Internship";
   credits: number;
   description: string;
+  sections: number;
 }
 
 interface Allocation {
