@@ -239,7 +239,6 @@ export async function registerRoutes(
         credits: z.number().int(),
         description: z.string(),
         sections: z.number().int().min(1).default(1),
-        capacity: z.number().int().min(1).default(1),
       });
 
       const data = subjectSchema.parse(req.body);
@@ -261,7 +260,6 @@ export async function registerRoutes(
         credits: z.number().int(),
         description: z.string(),
         sections: z.number().int().default(1),
-        capacity: z.number().int().default(1),
       }));
 
       const data = bulkSchema.parse(req.body);
@@ -282,7 +280,6 @@ export async function registerRoutes(
         credits: z.number().int().optional(),
         description: z.string().optional(),
         sections: z.number().int().min(1).optional(),
-        capacity: z.number().int().min(1).optional(),
       });
 
       const data = subjectSchema.parse(req.body);

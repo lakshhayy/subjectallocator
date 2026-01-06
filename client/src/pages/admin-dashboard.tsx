@@ -625,7 +625,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      capacity: parseInt(formData.capacity) || 1,
+      sections: parseInt(formData.capacity) || 1,
     });
   };
 
@@ -637,7 +637,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      capacity: parseInt(formData.capacity) || 1,
+      sections: parseInt(formData.capacity) || 1,
     });
   };
 
