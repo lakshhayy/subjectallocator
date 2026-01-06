@@ -31,6 +31,7 @@ const loginLimiter = rateLimit({
   message: { message: "Too many login attempts, please try again after 60 seconds." },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   keyGenerator: (req) => req.ip || "unknown", 
 });
 
