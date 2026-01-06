@@ -312,14 +312,14 @@ export default function Allotment() {
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
+            <SheetContent className="flex flex-col h-full">
+              <SheetHeader className="flex-none">
                 <SheetTitle>Ranked Preferences</SheetTitle>
                 <SheetDescription>
                   Rank at least {minRequired} subjects. Use arrows to change order.
                 </SheetDescription>
               </SheetHeader>
-              <div className="mt-8 space-y-4">
+              <div className="flex-1 overflow-y-auto mt-8 pr-2 space-y-4 min-h-0">
                 {preferences.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                     No subjects added to preferences
@@ -337,7 +337,7 @@ export default function Allotment() {
                             <p className="text-xs text-muted-foreground">{subject.code} • Sem {subject.semester}</p>
                           </div>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -371,7 +371,7 @@ export default function Allotment() {
                 )}
               </div>
               
-              <div className="absolute bottom-0 left-0 right-0 p-6 border-t bg-background">
+              <div className="flex-none pt-6 mt-4 border-t bg-background">
                  <Button 
                   className="w-full" 
                   disabled={preferences.length < minRequired || savePreferencesMutation.isPending}
