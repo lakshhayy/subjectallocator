@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search } from "lucide-react";
+import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search, Upload, User } from "lucide-react"; // NEW: Upload, User
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
-
-import { createPortal } from "react-dom";
 
 interface Analytics {
   totalSubjects: number;
@@ -94,7 +92,7 @@ interface Subject {
   type: string;
   credits: number;
   description: string;
-  sections?: number;
+  capacity?: number;
 }
 
 const SUBJECT_TYPES = ["Core", "Elective", "Lab", "Project", "Internship"];
@@ -104,8 +102,7 @@ const addUserSchema = z.object({
   name: z.string().min(2, "Name is required"),
   username: z.string().min(3, "Username must be at least 3 chars"),
   password: z.string().min(6, "Password must be at least 6 chars"),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
-  designation: z.string().optional(),
+  imageUrl: z.string().optional(),
 });
 
 function FacultyManagement() {
@@ -115,7 +112,7 @@ function FacultyManagement() {
 
   const form = useForm<z.infer<typeof addUserSchema>>({
     resolver: zodResolver(addUserSchema),
-    defaultValues: { name: "", username: "", password: "", email: "", designation: "" }
+    defaultValues: { name: "", username: "", password: "" }
   });
 
   const { data: fetchedFaculty, refetch } = useQuery({
@@ -219,11 +216,8 @@ function FacultyManagement() {
                   <FormField control={form.control} name="password" render={({ field }) => (
                     <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl></FormItem>
                   )} />
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                    <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="faculty@example.com" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="designation" render={({ field }) => (
-                    <FormItem><FormLabel>Designation</FormLabel><FormControl><Input placeholder="e.g. Assistant Professor" {...field} /></FormControl></FormItem>
+                   <FormField control={form.control} name="imageUrl" render={({ field }) => (
+                    <FormItem><FormLabel>Profile Image URL</FormLabel><FormControl><Input placeholder="https://example.com/photo.jpg" {...field} /></FormControl></FormItem>
                   )} />
                   <Button type="submit" className="w-full">Create Account</Button>
                 </form>
@@ -240,10 +234,16 @@ function FacultyManagement() {
             <Reorder.Item key={f.id} value={f}>
               <div className="flex items-center gap-3 p-3 border rounded-md bg-background hover:bg-accent/50 transition-colors">
                 <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab active:cursor-grabbing" />
+                <div className="h-10 w-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
+                  {f.imageUrl ? (
+                    <img src={f.imageUrl} alt={f.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-full w-full p-2 text-muted-foreground" />
+                  )}
+                </div>
                 <div className="flex-1">
                   <p className="font-medium">{f.name}</p>
-                  <p className="text-xs text-muted-foreground">{f.designation || "Faculty"} • @{f.username}</p>
-                  {f.email && <p className="text-xs text-muted-foreground">{f.email}</p>}
+                  <p className="text-xs text-muted-foreground">@{f.username}</p>
                 </div>
                 <div className="text-sm text-muted-foreground mr-4">
                   Rank: {f.seniority || "N/A"}
@@ -277,14 +277,14 @@ export default function AdminDashboard() {
     type: "Core",
     credits: "4",
     description: "",
-    sections: "1",
+    capacity: "1",
   });
 
   const [minPreferences, setMinPreferences] = useState(7);
-
-  // NEW: State for Search and Filter
   const [subjectSearch, setSubjectSearch] = useState("");
   const [subjectSemesterFilter, setSubjectSemesterFilter] = useState("all");
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user && user.role !== "admin") {
@@ -307,7 +307,6 @@ export default function AdminDashboard() {
     }
   }, [settings]);
 
-  // --- DOWNLOAD CSV FUNCTION ---
   const downloadCSV = () => {
     if (!analytics?.facultyAllocations) {
       toast({ title: "No Data", description: "There is no allocation data to export yet.", variant: "destructive" });
@@ -350,6 +349,68 @@ export default function AdminDashboard() {
     toast({ title: "Downloaded", description: "Report exported successfully." });
   };
 
+  const bulkUploadMutation = useMutation({
+    mutationFn: async (subjects: any[]) => {
+      const res = await fetch("/api/admin/subjects/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subjects)
+      });
+      if (!res.ok) throw new Error("Failed to upload");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Success", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ["admin-subjects"] });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to upload. Check CSV format.", variant: "destructive" });
+    }
+  });
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split("\n");
+      const subjects: any[] = [];
+
+      const startIndex = lines[0].toLowerCase().includes("code") ? 1 : 0;
+
+      for (let i = startIndex; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const parts = line.split(",");
+
+        if (parts.length >= 5) {
+          subjects.push({
+            code: parts[0].trim(),
+            name: parts[1].trim(),
+            semester: parseInt(parts[2].trim()) || 1,
+            type: parts[3].trim(),
+            credits: parseInt(parts[4].trim()) || 3,
+            description: parts[5]?.trim() || "",
+            capacity: parseInt(parts[6]?.trim()) || 1,
+          });
+        }
+      }
+
+      if (subjects.length > 0) {
+        if (confirm(`Ready to upload ${subjects.length} subjects?`)) {
+          bulkUploadMutation.mutate(subjects);
+        }
+      } else {
+        toast({ title: "Error", description: "No valid subjects found in file", variant: "destructive" });
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const updateSettingsMutation = useMutation({
     mutationFn: async (val: number) => {
       const res = await fetch("/api/admin/settings", {
@@ -360,10 +421,8 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast({ title: "Updated", description: "System settings updated successfully." });
-      queryClient.setQueryData(["admin-settings"], data);
-      setMinPreferences(data.minPreferences);
       queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
     },
     onError: () => toast({ title: "Error", description: "Failed to update settings", variant: "destructive" })
@@ -459,7 +518,7 @@ export default function AdminDashboard() {
         type: "Core",
         credits: "4",
         description: "",
-        sections: "1",
+        capacity: "1",
       });
       toast({
         title: "Success",
@@ -569,7 +628,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      sections: parseInt(formData.sections) || 1,
+      capacity: parseInt(formData.capacity) || 1,
     });
   };
 
@@ -581,7 +640,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      sections: parseInt(formData.sections) || 1,
+      capacity: parseInt(formData.capacity) || 1,
     });
   };
 
@@ -594,12 +653,11 @@ export default function AdminDashboard() {
       type: subject.type,
       credits: subject.credits.toString(),
       description: subject.description,
-      sections: (subject.sections || 1).toString(),
+      capacity: (subject.capacity || 1).toString(),
     });
     setIsEditDialogOpen(true);
   };
 
-  // FILTERED SUBJECTS LOGIC
   const filteredSubjects = subjectsList.filter(subject => {
     const matchesSearch = subject.name.toLowerCase().includes(subjectSearch.toLowerCase()) || 
                           subject.code.toLowerCase().includes(subjectSearch.toLowerCase());
@@ -623,87 +681,82 @@ export default function AdminDashboard() {
   }
 
   if (!analytics) {
-    return null;
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">
+          <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+          <h2 className="text-2xl font-bold">Failed to Load Dashboard</h2>
+          <p className="text-muted-foreground mt-2 max-w-md">
+            The analytics data could not be fetched. This usually happens if the database migration hasn't been run.
+          </p>
+          <div className="mt-6 flex gap-4">
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+            <p className="text-xs text-muted-foreground self-center">
+              (Check server console for "500 Internal Server Error")
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
   }
 
   return (
     <Layout>
       <div className="space-y-6">
-        <Tabs defaultValue="overview" className="w-full">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-serif font-bold text-foreground">Admin Dashboard</h1>
-              <p className="text-muted-foreground mt-1">Manage subjects, allocations and faculty</p>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-4">
-              {document.getElementById("sidebar-tabs-portal") && createPortal(
-                <TabsList className="flex flex-col w-full h-auto bg-transparent p-0 gap-1">
-                  <TabsTrigger 
-                    value="overview" 
-                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
-                  >
-                    <Settings className="h-4 w-4" />
-                    Overview
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="faculty"
-                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
-                  >
-                    <Users className="h-4 w-4" />
-                    Faculty
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="subjects"
-                    className="w-full justify-start gap-3 px-3 py-2 h-9 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-muted-foreground bg-transparent border-none shadow-none"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    Subjects
-                  </TabsTrigger>
-                </TabsList>,
-                document.getElementById("sidebar-tabs-portal")!
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                <Button 
-                  variant="outline"
-                  onClick={downloadCSV}
-                  className="flex items-center gap-2 h-9"
-                >
-                  <Download className="h-4 w-4" />
-                  Download Report
-                </Button>
-
-                <Button 
-                  variant="outline"
-                  onClick={() => {
-                    if(confirm("Are you sure you want to reset ALL faculty preferences and allotments? This will start a completely fresh round.")) {
-                      resetSystemMutation.mutate();
-                    }
-                  }}
-                  disabled={resetSystemMutation.isPending}
-                  className="flex items-center gap-2 h-9 border-destructive text-destructive hover:bg-destructive hover:text-white"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Reset All
-                </Button>
-                <Button 
-                  onClick={() => runAllotmentMutation.mutate()} 
-                  disabled={runAllotmentMutation.isPending}
-                  className="flex items-center gap-2 h-9"
-                >
-                  <Play className="h-4 w-4" />
-                  {runAllotmentMutation.isPending 
-                    ? "Running..." 
-                    : analytics?.totalAllocations === 0 
-                      ? "Run Round 1" 
-                      : "Run Round 2"}
-                </Button>
-              </div>
-            </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-foreground">Admin Dashboard</h1>
+            <p className="text-muted-foreground mt-1">Manage subjects, allocations and faculty</p>
           </div>
+          <div className="flex flex-wrap gap-2">
 
-          <TabsContent value="overview" className="space-y-4 mt-6">
+            <Button 
+              variant="outline"
+              onClick={downloadCSV}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download Report
+            </Button>
+
+            <Button 
+              variant="outline"
+              onClick={() => {
+                if(confirm("Are you sure you want to reset ALL faculty preferences and allotments? This will start a completely fresh round.")) {
+                  resetSystemMutation.mutate();
+                }
+              }}
+              disabled={resetSystemMutation.isPending}
+              className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset All
+            </Button>
+            <Button 
+              onClick={() => runAllotmentMutation.mutate()} 
+              disabled={runAllotmentMutation.isPending}
+              className="flex items-center gap-2"
+            >
+              <Play className="h-4 w-4" />
+              {runAllotmentMutation.isPending 
+                ? "Running..." 
+                : analytics?.totalAllocations === 0 
+                  ? "Run Round 1" 
+                  : "Run Round 2"}
+            </Button>
+          </div>
+        </div>
+
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList>
+            <TabsTrigger value="overview">Overview & Analytics</TabsTrigger>
+            <TabsTrigger value="faculty">Faculty Management</TabsTrigger>
+            <TabsTrigger value="subjects">Subject Management</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-4 mt-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="space-y-1">
@@ -740,46 +793,46 @@ export default function AdminDashboard() {
             </Card>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
+              <Card data-testid="card-total-subjects">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Subjects</CardTitle>
                   <BookOpen className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalSubjects}</div>
+                  <div className="text-2xl font-bold" data-testid="text-total-subjects">{analytics.totalSubjects}</div>
                   <p className="text-xs text-muted-foreground">Across all semesters</p>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card data-testid="card-total-allocations">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Final Allotments</CardTitle>
                   <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalAllocations}</div>
+                  <div className="text-2xl font-bold" data-testid="text-total-allocations">{analytics.totalAllocations}</div>
                   <p className="text-xs text-muted-foreground">Processed by algorithm</p>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card data-testid="card-faculty-participated">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Faculty Submitted</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalFaculty}</div>
+                  <div className="text-2xl font-bold" data-testid="text-faculty-participated">{analytics.totalFaculty}</div>
                   <p className="text-xs text-muted-foreground">Have saved preferences</p>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card data-testid="card-unallocated">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Unallocated Subjects</CardTitle>
                   <AlertCircle className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-destructive">{analytics.unallocatedSubjects}</div>
+                  <div className="text-2xl font-bold text-destructive" data-testid="text-unallocated">{analytics.unallocatedSubjects}</div>
                   <p className="text-xs text-muted-foreground">Need allocation</p>
                 </CardContent>
               </Card>
@@ -845,6 +898,7 @@ export default function AdminDashboard() {
                       <div 
                         key={allocation.user.id} 
                         className="border rounded-lg p-4"
+                        data-testid={`faculty-allocation-${allocation.user.id}`}
                       >
                         <div className="flex items-center justify-between mb-3">
                           <div>
@@ -860,6 +914,7 @@ export default function AdminDashboard() {
                             <div 
                               key={subject.id} 
                               className="flex items-center justify-between text-sm bg-muted p-2 rounded"
+                              data-testid={`subject-${subject.id}`}
                             >
                               <div>
                                 <span className="font-medium">{subject.code}</span> - {subject.name}
@@ -905,6 +960,7 @@ export default function AdminDashboard() {
                       <div 
                         key={allocation.subject.id} 
                         className="border rounded-lg p-4"
+                        data-testid={`subject-allocation-${allocation.subject.id}`}
                       >
                         <div className="mb-3">
                           <h3 className="font-medium">{allocation.subject.name}</h3>
@@ -917,6 +973,7 @@ export default function AdminDashboard() {
                             <div 
                               key={faculty.id} 
                               className="text-sm bg-primary/10 text-primary px-3 py-1 rounded-full"
+                              data-testid={`faculty-${faculty.id}`}
                             >
                               {faculty.name}
                             </div>
@@ -941,9 +998,21 @@ export default function AdminDashboard() {
                   <CardTitle>Subject Management</CardTitle>
                   <p className="text-sm text-muted-foreground">Add, edit, or remove subjects</p>
                 </div>
-                <Button onClick={() => setIsAddDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" /> Add Subject
-                </Button>
+                <div className="flex gap-2">
+                  <input 
+                    type="file" 
+                    accept=".csv" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={handleFileUpload}
+                  />
+                  <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" /> Upload CSV
+                  </Button>
+                  <Button onClick={() => setIsAddDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" /> Add Subject
+                  </Button>
+                </div>
               </CardHeader>
 
               <div className="px-6 pb-2">
@@ -997,7 +1066,7 @@ export default function AdminDashboard() {
                           <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
                             <span className="bg-primary/10 text-primary px-2 py-1 rounded">{subject.type}</span>
                             <span className="bg-muted px-2 py-1 rounded">{subject.credits} credits</span>
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Sections: {subject.sections || 1}</span>
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Capacity: {subject.capacity || 1}</span>
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">{subject.description}</p>
                         </div>
@@ -1098,15 +1167,15 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <Label htmlFor="sections">Sections</Label>
+                <Label htmlFor="capacity">Capacity (Sections)</Label>
                 <Input
-                  id="sections"
+                  id="capacity"
                   type="number"
                   min="1"
                   max="10"
                   placeholder="1"
-                  value={formData.sections}
-                  onChange={(e) => setFormData({...formData, sections: e.target.value})}
+                  value={formData.capacity}
+                  onChange={(e) => setFormData({...formData, capacity: e.target.value})}
                 />
               </div>
             </div>
@@ -1182,29 +1251,27 @@ export default function AdminDashboard() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-credits">Credits</Label>
-                <Input
-                  id="edit-credits"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={formData.credits}
-                  onChange={(e) => setFormData({...formData, credits: e.target.value})}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-sections">Sections</Label>
-                <Input
-                  id="edit-sections"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={formData.sections}
-                  onChange={(e) => setFormData({...formData, sections: e.target.value})}
-                />
-              </div>
+            <div>
+              <Label htmlFor="edit-credits">Credits</Label>
+              <Input
+                id="edit-credits"
+                type="number"
+                min="1"
+                max="10"
+                value={formData.credits}
+                onChange={(e) => setFormData({...formData, credits: e.target.value})}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-capacity">Capacity (Sections)</Label>
+              <Input
+                id="edit-capacity"
+                type="number"
+                min="1"
+                max="10"
+                value={formData.capacity}
+                onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+              />
             </div>
             <div>
               <Label htmlFor="edit-description">Description</Label>

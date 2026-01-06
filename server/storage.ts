@@ -35,6 +35,7 @@ export interface IStorage {
   getSubjectById(id: string): Promise<Subject | undefined>;
   getSubjectsBySemester(semester: number): Promise<Subject[]>;
   createSubject(subject: any): Promise<Subject>;
+  createSubjectsBulk(subjects: any[]): Promise<Subject[]>; // NEW: Bulk Upload Method
   updateSubject(id: string, subject: any): Promise<Subject>;
   deleteSubject(id: string): Promise<void>;
 
@@ -58,7 +59,7 @@ export interface IStorage {
   getFacultyLoadHistory(facultyId: string): Promise<FacultyLoadHistory[]>;
   calculateSubjectProbabilities(userId: string): Promise<any[]>;
 
-  // System Settings operations (NEW)
+  // System Settings operations
   getSystemSettings(): Promise<SystemSettings>;
   updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings>;
 }
@@ -118,6 +119,11 @@ export class DatabaseStorage implements IStorage {
   async createSubject(subject: any): Promise<Subject> {
     const result = await db.insert(subjects).values(subject).returning();
     return result[0];
+  }
+
+  // NEW: Implementation for Bulk Upload
+  async createSubjectsBulk(subjectsList: any[]): Promise<Subject[]> {
+    return await db.insert(subjects).values(subjectsList).returning();
   }
 
   async updateSubject(id: string, subject: any): Promise<Subject> {

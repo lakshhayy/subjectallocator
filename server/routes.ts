@@ -5,8 +5,8 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { storage } from "./storage";
 import { z } from "zod";
 import { db } from "./db";
-import bcrypt from "bcrypt"; 
-import rateLimit from "express-rate-limit"; // NEW: Import Rate Limit
+import bcrypt from "bcrypt";
+import rateLimit from "express-rate-limit";
 
 // Middleware to check if user is authenticated
 function requireAuth(req: any, res: any, next: any) {
@@ -24,15 +24,13 @@ function requireAdmin(req: any, res: any, next: any) {
   next();
 }
 
-// NEW: Rate Limiter Configuration
-// Allows 5 requests per 1 minute
+// Rate Limiter Configuration
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 5, // Limit each IP to 5 login requests per window
   message: { message: "Too many login attempts, please try again after 60 seconds." },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Replit/Proxies need this to identify IPs correctly (relies on trust proxy setting in index.ts)
+  standardHeaders: true,
+  legacyHeaders: false,
   keyGenerator: (req) => req.ip || "unknown", 
 });
 
@@ -44,7 +42,6 @@ export async function registerRoutes(
   // ============ AUTH ROUTES ============
 
   // Login
-  // NEW: Added 'loginLimiter' middleware here
   app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
       const loginSchema = z.object({
@@ -61,7 +58,7 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Session Regeneration (Anti-Fixation)
+      // Session Regeneration
       req.session.regenerate((err) => {
         if (err) {
           return res.status(500).json({ message: "Failed to create session" });
@@ -156,8 +153,7 @@ export async function registerRoutes(
         username: z.string().min(3),
         password: z.string().min(6),
         name: z.string().min(2),
-        email: z.string().email().optional().or(z.literal("")),
-        designation: z.string().optional(),
+        imageUrl: z.string().optional(),
         role: z.literal("faculty").default("faculty"),
         seniority: z.number().optional().default(999),
       });
@@ -168,7 +164,6 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      // Hash password before creating user
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
       const user = await storage.createUser({
@@ -239,6 +234,7 @@ export async function registerRoutes(
         credits: z.number().int(),
         description: z.string(),
         sections: z.number().int().min(1).default(1),
+        capacity: z.number().int().min(1).default(1),
       });
 
       const data = subjectSchema.parse(req.body);
@@ -246,6 +242,28 @@ export async function registerRoutes(
       return res.json(subject);
     } catch (error) {
       return res.status(400).json({ message: "Failed to create subject" });
+    }
+  });
+
+  // NEW: BULK UPLOAD SUBJECTS ROUTE
+  app.post("/api/admin/subjects/bulk", requireAdmin, async (req, res) => {
+    try {
+      const bulkSchema = z.array(z.object({
+        code: z.string(),
+        name: z.string(),
+        semester: z.number().int(),
+        type: z.string(),
+        credits: z.number().int(),
+        description: z.string(),
+        sections: z.number().int().default(1),
+        capacity: z.number().int().default(1),
+      }));
+
+      const data = bulkSchema.parse(req.body);
+      const created = await storage.createSubjectsBulk(data);
+      return res.json({ message: `Successfully added ${created.length} subjects` });
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid data format or duplicate codes" });
     }
   });
 
@@ -259,6 +277,7 @@ export async function registerRoutes(
         credits: z.number().int().optional(),
         description: z.string().optional(),
         sections: z.number().int().min(1).optional(),
+        capacity: z.number().int().min(1).optional(),
       });
 
       const data = subjectSchema.parse(req.body);
@@ -360,6 +379,7 @@ export async function registerRoutes(
 
       allSubjects.forEach(s => {
         const usedSlots = existingAllocations.filter(a => a.subject.id === s.id).length;
+        // Use 'sections' as the primary indicator for how many faculty can be assigned
         const cap = s.sections || 1; 
         const remaining = Math.max(0, cap - usedSlots);
         subjectAvailability.set(s.id, remaining);
