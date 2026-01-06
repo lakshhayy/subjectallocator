@@ -5,6 +5,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { storage } from "./storage";
 import { z } from "zod";
 import { db } from "./db";
+import bcrypt from "bcrypt";
  // Ensure you have installed bcrypt as discussed
 
 // Middleware to check if user is authenticated
@@ -45,7 +46,9 @@ export async function registerRoutes(
       // SECURITY FIX: Using simple comparison for now as per previous code, 
       // but strictly recommendation is bcrypt (commented out below for drop-in compatibility if not installed yet)
       // if (!user || !await bcrypt.compare(password, user.password)) {
-      if (!user || user.password !== password) {
+      // NEW (SECURE)
+      // compare(plainText, hash) returns true if they match
+      if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
@@ -146,7 +149,16 @@ export async function registerRoutes(
       }
 
       // Note: In production, hash password here before creating
-      const user = await storage.createUser(data);
+      // OLD
+      // const user = await storage.createUser(data);
+
+      // NEW
+      const hashedPassword = await bcrypt.hash(data.password, 10); // 10 is the           salt rounds
+
+      const user = await storage.createUser({
+        ...data,
+        password: hashedPassword, // Save the hash, not the plain text
+      });
       const { password, ...safeUser } = user;
       return res.json(safeUser);
     } catch (error) {

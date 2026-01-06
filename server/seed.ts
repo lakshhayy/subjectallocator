@@ -2,33 +2,45 @@ import { db } from "./db";
 import { users, subjects, roundMetadata } from "@shared/schema";
 import { subjects as subjectsData } from "../client/src/lib/mock-data";
 import { facultyUsers } from "../client/src/lib/users";
+import bcrypt from "bcrypt"; // NEW: Import bcrypt for hashing
 
 async function seed() {
   try {
     console.log("Seeding database...");
 
-    // Seed users (faculty + admin)
-    const usersToInsert = [
-      ...facultyUsers.map((user: { username: string; password: string; name: string; seniority?: number }) => ({
+    // NEW: Create the Admin password hash
+    // "10" is the cost factor (salt rounds), standard for bcrypt
+    const adminPasswordHash = await bcrypt.hash("admin123", 10);
+
+    // NEW: Map over faculty users and hash their passwords asynchronously
+    // We use Promise.all because bcrypt.hash is an async operation
+    const facultyWithHashes = await Promise.all(
+      facultyUsers.map(async (user: { username: string; password: string; name: string; seniority?: number }) => ({
         username: user.username,
-        password: user.password, // In production, hash these!
+        password: await bcrypt.hash(user.password, 10), // NEW: Hash the password before saving!
         name: user.name,
         role: "faculty" as const,
         seniority: user.seniority || 99,
-      })),
+      }))
+    );
+
+    // Combine hashed faculty and hashed admin into one list
+    const usersToInsert = [
+      ...facultyWithHashes,
       {
         username: "admin",
-        password: "admin123",
+        password: adminPasswordHash, // NEW: Use the hashed password here
         name: "System Administrator",
         role: "admin" as const,
         seniority: 0,
       }
     ];
 
+    // Insert users into the database
     await db.insert(users).values(usersToInsert).onConflictDoNothing();
     console.log(`✓ Inserted ${usersToInsert.length} users`);
 
-    // Seed subjects
+    // Seed subjects (No changes here)
     const subjectsToInsert = subjectsData.map(subject => ({
       code: subject.code,
       name: subject.name,
@@ -41,7 +53,7 @@ async function seed() {
     await db.insert(subjects).values(subjectsToInsert).onConflictDoNothing();
     console.log(`✓ Inserted ${subjectsToInsert.length} subjects`);
 
-    // Initial Round Metadata
+    // Initial Round Metadata (No changes here)
     await db.insert(roundMetadata).values({
       roundId: "R1-2025",
       semesterYear: "Jan-Jun 2025",
