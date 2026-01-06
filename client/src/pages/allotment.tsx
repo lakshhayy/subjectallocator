@@ -84,6 +84,17 @@ export default function Allotment() {
     }
   });
 
+  const { data: settings } = useQuery<{ minPreferences: number }>({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    }
+  });
+
+  const minRequired = settings?.minPreferences ?? 3;
+
   const savePreferencesMutation = useMutation({
     mutationFn: async (prefs: { subjectId: string; rank: number }[]) => {
       const response = await fetch("/api/preferences", {
@@ -305,7 +316,7 @@ export default function Allotment() {
               <SheetHeader>
                 <SheetTitle>Ranked Preferences</SheetTitle>
                 <SheetDescription>
-                  Rank at least 3 subjects. Use arrows to change order.
+                  Rank at least {minRequired} subjects. Use arrows to change order.
                 </SheetDescription>
               </SheetHeader>
               <div className="mt-8 space-y-4">
@@ -363,14 +374,14 @@ export default function Allotment() {
               <div className="absolute bottom-0 left-0 right-0 p-6 border-t bg-background">
                  <Button 
                   className="w-full" 
-                  disabled={preferences.length < 3 || savePreferencesMutation.isPending}
+                  disabled={preferences.length < minRequired || savePreferencesMutation.isPending}
                   onClick={() => savePreferencesMutation.mutate(preferences)}
                 >
                   {savePreferencesMutation.isPending ? "Saving..." : "Save Preferences"}
                  </Button>
-                 {preferences.length < 3 && (
+                 {preferences.length < minRequired && (
                    <p className="text-[10px] text-destructive text-center mt-2">
-                     Minimum 3 subjects required
+                     Minimum {minRequired} subjects required
                    </p>
                  )}
               </div>
