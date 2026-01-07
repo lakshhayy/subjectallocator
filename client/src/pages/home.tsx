@@ -2,9 +2,25 @@ import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { BookOpen, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { BookOpen, CheckCircle, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+interface Subject {
+  id: string;
+  code: string;
+  name: string;
+  semester: number;
+  type: string;
+  credits: number;
+}
+
+interface Allocation {
+  id: string;
+  subject: Subject;
+  createdAt: string;
+}
 
 export default function Home() {
   const { user } = useAuth();
@@ -18,6 +34,16 @@ export default function Home() {
     }
   }, [user, setLocation, isRedirecting]);
 
+  const { data: allocations = [] } = useQuery<Allocation[]>({
+    queryKey: ["allocations", "my"],
+    queryFn: async () => {
+      const response = await fetch("/api/allocations/my", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch allocations");
+      return response.json();
+    },
+    enabled: !!user && user.role === "faculty",
+  });
+
   if (isRedirecting) return null;
 
   return (
@@ -27,6 +53,47 @@ export default function Home() {
           <h1 className="text-3xl font-serif font-bold text-foreground">Welcome back, {user?.name.split(' ')[0] || "Faculty"}</h1>
           <p className="text-muted-foreground mt-2">Here is an overview of the ongoing subject allotment process for the upcoming academic session.</p>
         </div>
+
+        {/* Live Allotment Section */}
+        {user?.role === "faculty" && allocations.length > 0 && (
+          <Card className="border-green-200 bg-green-50/50">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CardTitle className="text-lg text-green-800">Your Allotted Subjects</CardTitle>
+              </div>
+              <CardDescription className="text-green-700">
+                The administration has finalized the following allotments for you.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {allocations.map((allocation) => (
+                  <div 
+                    key={allocation.id} 
+                    className="bg-white p-4 rounded-lg border border-green-100 shadow-sm flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-green-100 text-green-700 uppercase">
+                          {allocation.subject.code}
+                        </span>
+                        <span className="text-[10px] font-medium text-muted-foreground">
+                          Sem {allocation.subject.semester}
+                        </span>
+                      </div>
+                      <h4 className="font-semibold text-sm line-clamp-2">{allocation.subject.name}</h4>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{allocation.subject.type}</span>
+                      <span className="font-medium">{allocation.subject.credits} Credits</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
