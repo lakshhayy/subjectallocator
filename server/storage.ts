@@ -337,6 +337,12 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async updateFacultyLoad(id: string, maxLoad: number): Promise<void> {
+    await db.update(users)
+      .set({ maxLoad })
+      .where(eq(users.id, id));
+  }
+
   async updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
     const current = await this.getSystemSettings();
     const result = await db.update(systemSettings)
