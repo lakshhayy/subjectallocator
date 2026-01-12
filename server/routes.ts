@@ -85,6 +85,10 @@ export async function registerRoutes(
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(404).json({ message: "User not found" });
+      
+      // Update session user if it changed in DB
+      req.session.user = user;
+      
       const { password: _, ...userWithoutPassword } = user;
       return res.json({ user: userWithoutPassword });
     } catch (error) {
