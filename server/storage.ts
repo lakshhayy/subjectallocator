@@ -29,13 +29,14 @@ export interface IStorage {
   getAllFaculty(): Promise<User[]>;
   deleteUser(id: string): Promise<void>;
   updateFacultySeniority(items: { id: string; seniority: number }[]): Promise<void>;
+  updateFacultyLoad(id: string, maxLoad: number): Promise<void>; // NEW
 
   // Subject operations
   getAllSubjects(): Promise<Subject[]>;
   getSubjectById(id: string): Promise<Subject | undefined>;
   getSubjectsBySemester(semester: number): Promise<Subject[]>;
   createSubject(subject: any): Promise<Subject>;
-  createSubjectsBulk(subjects: any[]): Promise<Subject[]>; // NEW: Bulk Upload Method
+  createSubjectsBulk(subjects: any[]): Promise<Subject[]>;
   updateSubject(id: string, subject: any): Promise<Subject>;
   deleteSubject(id: string): Promise<void>;
 
@@ -102,6 +103,13 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // NEW Implementation
+  async updateFacultyLoad(id: string, maxLoad: number): Promise<void> {
+    await db.update(users)
+      .set({ maxLoad })
+      .where(eq(users.id, id));
+  }
+
   // Subject operations
   async getAllSubjects(): Promise<Subject[]> {
     return await db.select().from(subjects).orderBy(subjects.semester, subjects.code);
@@ -121,7 +129,6 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  // NEW: Implementation for Bulk Upload
   async createSubjectsBulk(subjectsList: any[]): Promise<Subject[]> {
     return await db.insert(subjects).values(subjectsList).returning();
   }
@@ -146,6 +153,7 @@ export class DatabaseStorage implements IStorage {
 
     return result.map(row => ({
       ...row.allocations,
+      roundNumber: row.allocations.roundNumber || 1, 
       subject: row.subjects!
     }));
   }

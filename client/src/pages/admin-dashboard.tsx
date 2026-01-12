@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search, Upload, User } from "lucide-react"; // NEW: Upload, User
+import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search, Upload, User, FileDown } from "lucide-react"; 
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ interface Subject {
   type: string;
   credits: number;
   description: string;
-  sections: number;
+  sections: number; 
 }
 
 const SUBJECT_TYPES = ["Core", "Elective", "Lab", "Project", "Internship"];
@@ -154,6 +154,19 @@ function FacultyManagement() {
     }
   };
 
+  const updateLoadMutation = useMutation({
+    mutationFn: async ({ id, maxLoad }: { id: string, maxLoad: number }) => {
+      await fetch("/api/admin/faculty/load", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, maxLoad })
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Updated", description: "Faculty quota updated" });
+    }
+  });
+
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure? This will remove all their allocations.")) return;
     try {
@@ -194,7 +207,7 @@ function FacultyManagement() {
           <h2 className="text-xl font-bold">Faculty Seniority Management</h2>
           <p className="text-sm text-muted-foreground">
             Drag and drop to rearrange seniority (Top = Most Senior). 
-            Click "Save Order" to apply.
+            Set quota for each faculty.
           </p>
         </div>
         <div className="flex gap-2">
@@ -242,13 +255,35 @@ function FacultyManagement() {
                     <User className="h-full w-full p-2 text-muted-foreground" />
                   )}
                 </div>
+
+                {/* Name Section */}
                 <div className="flex-1">
                   <p className="font-medium">{f.name}</p>
-                  <p className="text-xs text-muted-foreground">@{f.username}</p>
+                  <div className="flex gap-2 text-xs text-muted-foreground">
+                    <span>Rank: {f.seniority}</span>
+                    <span>•</span>
+                    <span>@{f.username}</span>
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground mr-4">
-                  Rank: {f.seniority || "N/A"}
+
+                {/* Quota Input */}
+                <div className="flex items-center gap-2 mr-4">
+                  <label className="text-xs text-muted-foreground font-medium">Quota:</label>
+                  <Input 
+                    type="number" 
+                    className="h-8 w-16 text-center" 
+                    defaultValue={f.maxLoad || 2}
+                    min={0}
+                    max={5}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val !== f.maxLoad) {
+                        updateLoadMutation.mutate({ id: f.id, maxLoad: val });
+                      }
+                    }}
+                  />
                 </div>
+
                 <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDelete(f.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -279,7 +314,7 @@ export default function AdminDashboard() {
     type: "Core",
     credits: "4",
     description: "",
-    capacity: "1",
+    sections: "1",
   });
 
   const [minPreferences, setMinPreferences] = useState(7);
@@ -308,6 +343,25 @@ export default function AdminDashboard() {
       setMinPreferences(settings.minPreferences);
     }
   }, [settings]);
+
+  const handleDownloadTemplate = () => {
+    const headers = ["Code,Name,Semester,Type,Credits,Description,Sections"];
+    const rows = [
+      "CS501,Network Security,5,Core,4,Advanced network defense strategies,2",
+      "CS502,Artificial Intelligence,5,Core,4,Introduction to AI and Neural Networks,3"
+    ];
+
+    const csvContent = [headers, ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "subject_upload_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const downloadCSV = () => {
     if (!analytics?.facultyAllocations) {
@@ -520,7 +574,7 @@ export default function AdminDashboard() {
         type: "Core",
         credits: "4",
         description: "",
-        capacity: "1",
+        sections: "1",
       });
       toast({
         title: "Success",
@@ -590,21 +644,26 @@ export default function AdminDashboard() {
     },
   });
 
-  const { data: analytics, isLoading, error } = useQuery<Analytics>({
+  const { data: analytics, isLoading } = useQuery<Analytics>({
     queryKey: ["admin-analytics"],
     queryFn: async () => {
       const response = await fetch("/api/admin/analytics", { credentials: "include" });
-      if (!response.ok) {
-        if (response.status === 401) {
-          window.location.href = "/login";
-          throw new Error("Unauthorized");
-        }
-        throw new Error("Failed to fetch analytics");
-      }
-      return response.json();
+      if (!response.ok) throw new Error("Failed to fetch analytics");
+      const data = await response.json();
+
+      const enhancedData = {
+        ...data,
+        facultyAllocations: data.facultyAllocations.map((fa: any) => ({
+          ...fa,
+          subjects: fa.subjects.map((s: any) => ({
+            ...s,
+            allocationId: data.rawAllocations?.find((a: any) => a.userId === fa.user.id && a.subjectId === s.id)?.id
+          }))
+        }))
+      };
+      return enhancedData;
     },
     enabled: user?.role === "admin",
-    retry: 1,
   });
 
   const { data: subjectsList = [] } = useQuery<Subject[]>({
@@ -625,7 +684,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      sections: parseInt(formData.capacity) || 1,
+      sections: parseInt(formData.sections) || 1,
     });
   };
 
@@ -637,7 +696,7 @@ export default function AdminDashboard() {
       type: formData.type,
       credits: parseInt(formData.credits),
       description: formData.description,
-      sections: parseInt(formData.capacity) || 1,
+      sections: parseInt(formData.sections) || 1,
     });
   };
 
@@ -650,7 +709,7 @@ export default function AdminDashboard() {
       type: subject.type,
       credits: subject.credits.toString(),
       description: subject.description,
-      capacity: (subject.sections || 1).toString(),
+      sections: (subject.sections || 1).toString(),
     });
     setIsEditDialogOpen(true);
   };
@@ -699,6 +758,8 @@ export default function AdminDashboard() {
     );
   }
 
+  const sidebarPortalTarget = document.getElementById("sidebar-tabs-portal");
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -746,12 +807,36 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList>
-            <TabsTrigger value="overview">Overview & Analytics</TabsTrigger>
-            <TabsTrigger value="faculty">Faculty Management</TabsTrigger>
-            <TabsTrigger value="subjects">Subject Management</TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="overview" className="w-full" onValueChange={setActiveTab}>
+          {sidebarPortalTarget ? createPortal(
+            <TabsList className="flex flex-col h-auto bg-transparent p-0 gap-1 w-full">
+              <TabsTrigger 
+                value="overview" 
+                className="w-full justify-start px-3 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+              >
+                Overview
+              </TabsTrigger>
+              <TabsTrigger 
+                value="faculty" 
+                className="w-full justify-start px-3 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+              >
+                Faculty Management
+              </TabsTrigger>
+              <TabsTrigger 
+                value="subjects" 
+                className="w-full justify-start px-3 py-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+              >
+                Subject Management
+              </TabsTrigger>
+            </TabsList>,
+            sidebarPortalTarget
+          ) : (
+            <TabsList>
+              <TabsTrigger value="overview">Overview & Analytics</TabsTrigger>
+              <TabsTrigger value="faculty">Faculty Management</TabsTrigger>
+              <TabsTrigger value="subjects">Subject Management</TabsTrigger>
+            </TabsList>
+          )}
 
           <TabsContent value="overview" className="space-y-4 mt-4">
             <Card>
@@ -1003,9 +1088,15 @@ export default function AdminDashboard() {
                     className="hidden" 
                     onChange={handleFileUpload}
                   />
+
+                  <Button variant="outline" onClick={handleDownloadTemplate}>
+                    <FileDown className="mr-2 h-4 w-4" /> Sample CSV
+                  </Button>
+
                   <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="mr-2 h-4 w-4" /> Upload CSV
                   </Button>
+
                   <Button onClick={() => setIsAddDialogOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" /> Add Subject
                   </Button>
@@ -1063,7 +1154,10 @@ export default function AdminDashboard() {
                           <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
                             <span className="bg-primary/10 text-primary px-2 py-1 rounded">{subject.type}</span>
                             <span className="bg-muted px-2 py-1 rounded">{subject.credits} credits</span>
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Capacity: {subject.sections || 1}</span>
+
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">
+                              Sections: {subject.sections || 1}
+                            </span>
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">{subject.description}</p>
                         </div>
@@ -1164,15 +1258,15 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <Label htmlFor="capacity">Capacity (Sections)</Label>
+                <Label htmlFor="sections">Sections</Label>
                 <Input
-                  id="capacity"
+                  id="sections"
                   type="number"
                   min="1"
                   max="10"
                   placeholder="1"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                  value={formData.sections}
+                  onChange={(e) => setFormData({...formData, sections: e.target.value})}
                 />
               </div>
             </div>
@@ -1260,14 +1354,14 @@ export default function AdminDashboard() {
               />
             </div>
             <div>
-              <Label htmlFor="edit-capacity">Capacity (Sections)</Label>
+              <Label htmlFor="edit-sections">Sections</Label>
               <Input
-                id="edit-capacity"
+                id="edit-sections"
                 type="number"
                 min="1"
                 max="10"
-                value={formData.capacity}
-                onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                value={formData.sections}
+                onChange={(e) => setFormData({...formData, sections: e.target.value})}
               />
             </div>
             <div>

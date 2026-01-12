@@ -12,6 +12,9 @@ export const users = pgTable("users", {
   seniority: integer("seniority").default(99), // Default seniority
   email: text("email"),
   designation: text("designation"),
+  imageUrl: text("image_url"),
+  // NEW: The limit for this specific teacher (Default is 2)
+  maxLoad: integer("max_load").notNull().default(2),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -29,8 +32,8 @@ export const subjects = pgTable("subjects", {
   type: text("type").notNull(), // "Core", "Elective", "Lab", "Project", "Internship"
   credits: integer("credits").notNull(),
   description: text("description").notNull(),
-  // NEW: Sections controls how many faculty can take this subject (e.g., 3 for 3 Sections)
   sections: integer("sections").notNull().default(1), 
+  capacity: integer("capacity").default(1), 
 });
 
 export const insertSubjectSchema = createInsertSchema(subjects).omit({
@@ -44,9 +47,9 @@ export const allocations = pgTable("allocations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   subjectId: varchar("subject_id").notNull().references(() => subjects.id, { onDelete: "cascade" }),
+  roundNumber: integer("round_number").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
-  // Unique constraint to prevent duplicate subject selections per faculty
   uniqueUserSubject: sql`UNIQUE (${table.userId}, ${table.subjectId})`,
 }));
 
@@ -117,7 +120,6 @@ export const roundMetadata = pgTable("round_metadata", {
 
 export type RoundMetadata = typeof roundMetadata.$inferSelect;
 
-// System Settings Table (Singleton)
 export const systemSettings = pgTable("system_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   minPreferences: integer("min_preferences").notNull().default(7),
