@@ -31,7 +31,11 @@ const loginLimiter = rateLimit({
   message: { message: "Too many login attempts, please try again after 60 seconds." },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip || "unknown", 
+  validate: {
+    trustProxy: false,
+    xForwardedForHeader: false,
+    ip: false
+  }
 });
 
 export async function registerRoutes(

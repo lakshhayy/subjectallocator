@@ -103,13 +103,6 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // NEW Implementation
-  async updateFacultyLoad(id: string, maxLoad: number): Promise<void> {
-    await db.update(users)
-      .set({ maxLoad })
-      .where(eq(users.id, id));
-  }
-
   // Subject operations
   async getAllSubjects(): Promise<Subject[]> {
     return await db.select().from(subjects).orderBy(subjects.semester, subjects.code);
