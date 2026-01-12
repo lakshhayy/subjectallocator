@@ -317,6 +317,18 @@ export default function AdminDashboard() {
     sections: "1",
   });
 
+  const [minPreferences, setMinPreferences] = useState(7);
+  const [subjectSearch, setSubjectSearch] = useState("");
+  const [subjectSemesterFilter, setSubjectSemesterFilter] = useState("all");
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      setLocation("/allotment");
+    }
+  }, [user, setLocation]);
+
   const { data: settings } = useQuery({
     queryKey: ["admin-settings"],
     queryFn: async () => {
@@ -325,8 +337,6 @@ export default function AdminDashboard() {
       return res.json();
     }
   });
-
-  const [minPreferences, setMinPreferences] = useState(7);
 
   useEffect(() => {
     if (settings?.minPreferences) {

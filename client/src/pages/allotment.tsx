@@ -88,7 +88,7 @@ export default function Allotment() {
   const { data: settings } = useQuery<{ minPreferences: number }>({
     queryKey: ["settings"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/settings"); // Fixed path
+      const res = await fetch("/api/settings");
       if (!res.ok) throw new Error("Failed");
       return res.json();
     }
