@@ -2,38 +2,17 @@ import { Subject } from "@/lib/mock-data";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Plus, Info } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-
-interface SubjectProbability {
-  subjectId: string;
-  subjectCode: string;
-  probability: number;
-  riskLevel: string;
-  recommendation: string;
-}
 
 interface SubjectCardProps {
   subject: Subject;
   isSelected: boolean;
   onToggle: (subject: Subject) => void;
   disabled: boolean;
-  probability?: SubjectProbability;
 }
 
-export function SubjectCard({ subject, isSelected, onToggle, disabled, probability }: SubjectCardProps) {
-  const getProbabilityColor = (score: number) => {
-    if (score >= 70) return "text-green-600 bg-green-50 border-green-200";
-    if (score >= 40) return "text-yellow-600 bg-yellow-50 border-yellow-200";
-    return "text-red-600 bg-red-50 border-red-200";
-  };
-
+export function SubjectCard({ subject, isSelected, onToggle, disabled }: SubjectCardProps) {
   return (
     <Card className={cn(
       "transition-all duration-300 hover:shadow-md border-border",
@@ -51,25 +30,6 @@ export function SubjectCard({ subject, isSelected, onToggle, disabled, probabili
                   {subject.type}
                 </Badge>
               </div>
-              {probability && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 cursor-help",
-                        getProbabilityColor(probability.probability)
-                      )}>
-                        {probability.probability}% Prob.
-                        <Info className="h-3 w-3" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[200px] text-xs">
-                      <p className="font-bold mb-1">{probability.recommendation}</p>
-                      <p>{probability.riskLevel} Risk of overlap or denial based on historical seniority analysis.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
             </div>
             <CardTitle className="text-base font-medium leading-tight h-10 line-clamp-2 mt-2">
               {subject.name}

@@ -477,17 +477,6 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/subjects/probabilities", requireAuth, async (req, res) => {
-    try {
-      const userId = req.session.userId!;
-      const probabilities = await storage.calculateSubjectProbabilities(userId);
-      probabilities.sort((a: any, b: any) => b.probabilityScore - a.probabilityScore);
-      return res.json(probabilities);
-    } catch (error) {
-      return res.status(500).json({ message: "Failed to calculate probabilities" });
-    }
-  });
-
   app.get("/api/admin/allocations", requireAuth, requireAdmin, async (req, res) => {
     try {
       const allocations = await storage.getAllAllocations();

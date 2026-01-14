@@ -4,8 +4,6 @@ import {
   users, 
   subjects, 
   allocations,
-  subjectHistory,
-  facultyLoadHistory,
   subjectPreferences,
   roundMetadata,
   systemSettings,
@@ -14,8 +12,6 @@ import {
   type Subject,
   type Allocation,
   type InsertAllocation,
-  type SubjectHistory,
-  type FacultyLoadHistory,
   type SubjectPreference,
   type RoundMetadata,
   type SystemSettings
@@ -54,11 +50,6 @@ export interface IStorage {
 
   // Round operations
   getActiveRound(): Promise<RoundMetadata | undefined>;
-
-  // Probability operations
-  getSubjectHistory(facultyId?: string): Promise<SubjectHistory[]>;
-  getFacultyLoadHistory(facultyId: string): Promise<FacultyLoadHistory[]>;
-  calculateSubjectProbabilities(userId: string): Promise<any[]>;
 
   // System Settings operations
   getSystemSettings(): Promise<SystemSettings>;
@@ -231,93 +222,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(roundMetadata.status, "active"))
       .limit(1);
     return result[0];
-  }
-
-  // ========== PROBABILITY SYSTEM OPERATIONS ==========
-
-  async getSubjectHistory(facultyId?: string): Promise<SubjectHistory[]> {
-    if (facultyId) {
-      return await db.select().from(subjectHistory).where(eq(subjectHistory.facultyId, facultyId));
-    }
-    return await db.select().from(subjectHistory);
-  }
-
-  async getFacultyLoadHistory(facultyId: string): Promise<FacultyLoadHistory[]> {
-    return await db.select().from(facultyLoadHistory).where(eq(facultyLoadHistory.facultyId, facultyId));
-  }
-
-  async calculateSubjectProbabilities(userId: string): Promise<any[]> {
-    const allSubjects = await this.getAllSubjects();
-    const allHistory = await this.getSubjectHistory();
-    const facultyHistory = allHistory.filter(h => h.facultyId === userId);
-    const loadHistory = await this.getFacultyLoadHistory(userId);
-
-    const previousLoad = loadHistory.sort((a, b) => 
-      new Date(b.semesterYear).getTime() - new Date(a.semesterYear).getTime()
-    )[0];
-
-    return allSubjects.map(subject => {
-      let score = 0;
-
-      const individualCount = facultyHistory.filter(h => h.code === subject.code).length;
-      if (individualCount >= 2) score += 40;
-      else if (individualCount === 1) score += 25;
-
-      const uniqueOthers = new Set(allHistory.filter(h => h.code === subject.code && h.facultyId !== userId).map(h => h.facultyId)).size;
-
-      if (uniqueOthers > 2) score -= 20; 
-      else if (uniqueOthers > 0) score -= 10; 
-
-      if (previousLoad) {
-        if (previousLoad.totalCredits < 8) score += 30; 
-        else if (previousLoad.totalCredits < 12) score += 15; 
-      } else {
-        score += 20; 
-      }
-
-      const primarySpec = previousLoad?.primarySpecialization;
-      const subjectCategory = this.extractCategory(subject.name);
-
-      if (primarySpec === subjectCategory) score += 30;
-      else if (facultyHistory.some(h => h.category === subjectCategory)) score += 15;
-
-      const finalScore = Math.min(100, Math.max(0, score));
-
-      return {
-        ...subject,
-        probabilityScore: finalScore,
-        riskLevel: this.getRiskLevel(finalScore),
-        recommendation: this.getRecommendation(finalScore),
-        historicalData: {
-          teachingCount: individualCount,
-          contestedBy: uniqueOthers,
-          lastTaughtCount: facultyHistory.length,
-        }
-      };
-    });
-  }
-
-  private extractCategory(name: string): string {
-    if (name.includes("Network")) return "Networks";
-    if (name.includes("Machine Learning") || name.includes("ML") || name.includes("AI")) return "ML";
-    if (name.includes("Database") || name.includes("DBMS")) return "Databases";
-    if (name.includes("Security") || name.includes("Hacking")) return "Security";
-    if (name.includes("Compiler")) return "Compilers";
-    if (name.includes("Data Structure")) return "DataStructures";
-    if (name.includes("Wireless")) return "Networks";
-    return "Other";
-  }
-
-  private getRiskLevel(score: number): string {
-    if (score >= 70) return "Low Risk";
-    if (score >= 40) return "Medium Risk";
-    return "High Risk";
-  }
-
-  private getRecommendation(score: number): string {
-    if (score >= 70) return "Highly Likely";
-    if (score >= 40) return "Likely";
-    return "Unlikely";
   }
 
   // System Settings Implementation

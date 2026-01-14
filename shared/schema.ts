@@ -61,33 +61,7 @@ export const insertAllocationSchema = createInsertSchema(allocations).omit({
 export type InsertAllocation = z.infer<typeof insertAllocationSchema>;
 export type Allocation = typeof allocations.$inferSelect;
 
-// ========== PROBABILITY SYSTEM TABLES ==========
-
-export const subjectHistory = pgTable("subject_history", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  code: text("code").notNull(), 
-  name: text("name").notNull(),
-  semesterYear: text("semester_year").notNull(), 
-  facultyId: varchar("faculty_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  creditsTheory: integer("credits_theory").notNull(),
-  creditsLab: integer("credits_lab").notNull(),
-  subjectType: text("subject_type").notNull(), 
-  category: text("category").notNull(), 
-});
-
-export type SubjectHistory = typeof subjectHistory.$inferSelect;
-
-export const facultyLoadHistory = pgTable("faculty_load_history", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  facultyId: varchar("faculty_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  semesterYear: text("semester_year").notNull(), 
-  totalCredits: integer("total_credits").notNull(),
-  numberOfSubjects: integer("number_of_subjects").notNull(),
-  primarySpecialization: text("primary_specialization"), 
-});
-
-export type FacultyLoadHistory = typeof facultyLoadHistory.$inferSelect;
-
+// Probability system tables removed.
 export const subjectPreferences = pgTable("subject_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

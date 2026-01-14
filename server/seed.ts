@@ -40,7 +40,7 @@ async function seed() {
     await db.insert(users).values(usersToInsert).onConflictDoNothing();
     console.log(`✓ Inserted ${usersToInsert.length} users`);
 
-    // Seed subjects (No changes here)
+    // Seed subjects
     const subjectsToInsert = subjectsData.map(subject => ({
       code: subject.code,
       name: subject.name,

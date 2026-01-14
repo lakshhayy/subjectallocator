@@ -7,7 +7,6 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Allotment from "@/pages/allotment";
-import Probabilities from "@/pages/probabilities";
 import Login from "@/pages/login";
 import AdminDashboard from "@/pages/admin-dashboard";
 import { useEffect } from "react";
@@ -39,9 +38,6 @@ function Router() {
       </Route>
       <Route path="/allotment">
         <PrivateRoute component={Allotment} />
-      </Route>
-      <Route path="/probabilities">
-        <PrivateRoute component={Probabilities} />
       </Route>
       <Route path="/admin">
         <PrivateRoute component={AdminDashboard} />

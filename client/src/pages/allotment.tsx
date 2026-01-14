@@ -35,23 +35,6 @@ interface Allocation {
   subject: Subject;
 }
 
-interface SubjectProbability {
-  id: string;
-  code: string;
-  name: string;
-  semester: number;
-  type: string;
-  credits: number;
-  description: string;
-  probabilityScore: number;
-  riskLevel: string;
-  recommendation: string;
-  historicalData: {
-    teachingCount: number;
-    lastTaughtCount: number;
-  };
-}
-
 interface SubjectPreference {
   id: string;
   userId: string;
@@ -166,16 +149,6 @@ export default function Allotment() {
     },
   });
 
-  // Fetch probabilities (this returns subjects with probability data)
-  const { data: probabilities = [] } = useQuery<SubjectProbability[]>({
-    queryKey: ["probabilities"],
-    queryFn: async () => {
-      const response = await fetch("/api/subjects/probabilities", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch probabilities");
-      return response.json();
-    },
-  });
-
   // Create allocation mutation
   const createAllocation = useMutation({
     mutationFn: async (subjectId: string) => {
@@ -268,15 +241,6 @@ export default function Allotment() {
   }, [subjects, searchQuery, semesterFilter, typeFilter]);
 
   const isSelectionDisabled = allocations.length >= 3;
-
-  // Create a map of probabilities by subject ID for quick lookup
-  const probabilityMap = new Map(probabilities.map(p => [p.id, {
-    subjectId: p.id,
-    subjectCode: p.code,
-    probability: p.probabilityScore,
-    riskLevel: p.riskLevel,
-    recommendation: p.recommendation
-  }]));
 
   if (loadingSubjects || loadingAllocations) {
     return (
@@ -453,7 +417,6 @@ export default function Allotment() {
                 onToggle={() => addToPreferences(subject.id)}
                 disabled={preferences.some(p => p.subjectId === subject.id)}
                 isSelected={preferences.some(p => p.subjectId === subject.id)}
-                probability={probabilityMap.get(subject.id)}
               />
             ))
           )}
