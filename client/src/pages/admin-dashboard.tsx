@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search, Upload, User, FileDown } from "lucide-react"; 
+import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search, Upload, User, FileDown, GraduationCap } from "lucide-react"; 
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
