@@ -514,6 +514,34 @@ export default function AdminDashboard() {
     },
   });
 
+  const runLabAllotmentMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/run-lab-allotment", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to run lab allotment");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
+      toast({
+        title: "Lab Allotment Completed",
+        description: `Successfully allotted ${data.allocations} lab positions.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetSystemMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch("/api/admin/reset-system", {
@@ -793,16 +821,23 @@ export default function AdminDashboard() {
               Reset All
             </Button>
             <Button 
-              onClick={() => runAllotmentMutation.mutate()} 
+              variant="outline" 
+              onClick={() => runAllotmentMutation.mutate()}
               disabled={runAllotmentMutation.isPending}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 border-primary text-primary hover:bg-primary/5"
             >
               <Play className="h-4 w-4" />
-              {runAllotmentMutation.isPending 
-                ? "Running..." 
-                : analytics?.totalAllocations === 0 
-                  ? "Run Round 1" 
-                  : "Run Round 2"}
+              {runAllotmentMutation.isPending ? "Running..." : "Run Theory Allotment"}
+            </Button>
+
+            <Button 
+              variant="outline" 
+              onClick={() => runLabAllotmentMutation.mutate()}
+              disabled={runLabAllotmentMutation.isPending}
+              className="flex items-center gap-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50"
+            >
+              <GraduationCap className="h-4 w-4" />
+              {runLabAllotmentMutation.isPending ? "Running..." : "Run Lab Allotment"}
             </Button>
           </div>
         </div>

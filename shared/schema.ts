@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -13,8 +13,10 @@ export const users = pgTable("users", {
   email: text("email"),
   designation: text("designation"),
   imageUrl: text("image_url"),
-  // NEW: The limit for this specific teacher (Default is 2)
+  // Theory subject limit (Default 2)
   maxLoad: integer("max_load").notNull().default(2),
+  // NEW: Lab specific workload quota (Default 3)
+  labLoad: integer("lab_load").notNull().default(3),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -33,7 +35,11 @@ export const subjects = pgTable("subjects", {
   credits: integer("credits").notNull(),
   description: text("description").notNull(),
   sections: integer("sections").notNull().default(1), 
-  capacity: integer("capacity").default(1), 
+  capacity: integer("capacity").default(1),
+  // NEW: Lab Support Fields
+  isLab: boolean("is_lab").default(false),
+  // Link this lab to a theory subject (self-reference)
+  relatedTheoryId: varchar("related_theory_id").references((): AnyPgColumn => subjects.id),
 });
 
 export const insertSubjectSchema = createInsertSchema(subjects).omit({
@@ -49,8 +55,14 @@ export const allocations = pgTable("allocations", {
   subjectId: varchar("subject_id").notNull().references(() => subjects.id, { onDelete: "cascade" }),
   roundNumber: integer("round_number").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // NEW: Lab Specific Allocation Fields
+  section: integer("section").default(1),
+  role: text("role").default("theory"), // 'theory', 'coordinator', 'co_teacher'
 }, (table) => ({
-  uniqueUserSubject: sql`UNIQUE (${table.userId}, ${table.subjectId})`,
+  // UNIQUE CONSTRAINT UPDATE:
+  // A user cannot be in the SAME subject and SAME section twice.
+  // But they CAN be in the same subject in different sections (e.g. Co-teacher in Sec 2 & 3)
+  uniqueAllocation: sql`UNIQUE (${table.userId}, ${table.subjectId}, ${table.section})`,
 }));
 
 export const insertAllocationSchema = createInsertSchema(allocations).omit({
@@ -61,7 +73,6 @@ export const insertAllocationSchema = createInsertSchema(allocations).omit({
 export type InsertAllocation = z.infer<typeof insertAllocationSchema>;
 export type Allocation = typeof allocations.$inferSelect;
 
-// Probability system tables removed.
 export const subjectPreferences = pgTable("subject_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

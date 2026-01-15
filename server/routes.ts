@@ -86,10 +86,10 @@ export async function registerRoutes(
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(404).json({ message: "User not found" });
-      
+
       // Update session user if it changed in DB
       req.session.user = user;
-      
+
       const { password: _, ...userWithoutPassword } = user;
       return res.json({ user: userWithoutPassword });
     } catch (error) {
@@ -160,10 +160,11 @@ export async function registerRoutes(
     try {
       const updateSchema = z.object({
         id: z.string(),
-        maxLoad: z.number().min(0).max(10)
+        maxLoad: z.number().min(0).max(10),
+        labLoad: z.number().min(0).max(10).optional()
       });
-      const { id, maxLoad } = updateSchema.parse(req.body);
-      await storage.updateFacultyLoad(id, maxLoad); 
+      const { id, maxLoad, labLoad } = updateSchema.parse(req.body);
+      await storage.updateFacultyLoad(id, maxLoad, labLoad); 
       return res.json({ message: "Faculty quota updated" });
     } catch (error) {
       return res.status(400).json({ message: "Invalid data" });
@@ -179,7 +180,8 @@ export async function registerRoutes(
         imageUrl: z.string().optional(),
         role: z.literal("faculty").default("faculty"),
         seniority: z.number().optional().default(999),
-        maxLoad: z.number().optional().default(2), // Allow setting load on create
+        maxLoad: z.number().optional().default(2),
+        labLoad: z.number().optional().default(3),
       });
       const data = newUserSchema.parse(req.body);
       const existing = await storage.getUserByUsername(data.username);
@@ -233,6 +235,9 @@ export async function registerRoutes(
         description: z.string(),
         sections: z.number().int().min(1).default(1),
         capacity: z.number().int().optional(),
+        // NEW FIELDS
+        isLab: z.boolean().default(false),
+        relatedTheoryId: z.string().optional(),
       });
       const data = subjectSchema.parse(req.body);
       const subject = await storage.createSubject(data);
@@ -253,6 +258,8 @@ export async function registerRoutes(
         description: z.string(),
         sections: z.number().int().default(1),
         capacity: z.number().int().optional(),
+        isLab: z.boolean().optional(),
+        relatedTheoryId: z.string().optional()
       }));
       const data = bulkSchema.parse(req.body);
       const created = await storage.createSubjectsBulk(data);
@@ -273,6 +280,8 @@ export async function registerRoutes(
         description: z.string().optional(),
         sections: z.number().int().min(1).optional(),
         capacity: z.number().int().optional(),
+        isLab: z.boolean().optional(),
+        relatedTheoryId: z.string().optional(),
       });
       const data = subjectSchema.parse(req.body);
       const subject = await storage.updateSubject(req.params.id, data);
@@ -336,9 +345,11 @@ export async function registerRoutes(
     }
   });
 
-  // RUN ALLOTMENT ALGORITHM
+  // RUN ALLOTMENT ALGORITHM (THEORY)
   app.post("/api/admin/run-allotment", requireAdmin, async (req, res) => {
     try {
+      // Original Theory Allocation Logic (Unchanged but using updated types)
+      // This allocates role="theory" implicitly because default is set in schema
       const allUsers = await db.select().from(users);
       const allSubjects = await storage.getAllSubjects();
       const existingAllocations = await storage.getAllAllocations();
@@ -356,43 +367,40 @@ export async function registerRoutes(
       const subjectAvailability = new Map<string, number>();
 
       allSubjects.forEach(s => {
-        const usedSlots = existingAllocations.filter(a => a.subject.id === s.id).length;
+        // Only count theory allocations for availability of theory
+        const usedSlots = existingAllocations.filter(a => a.subject.id === s.id && (a.role === 'theory' || a.role === null)).length;
         const cap = s.sections || 1; 
         const remaining = Math.max(0, cap - usedSlots);
         subjectAvailability.set(s.id, remaining);
       });
 
-      // DETERMINE ROUND: If allocations exist, this is Round 2 (or 3, 4...)
       const isRound2 = existingAllocations.length > 0;
       const currentRoundNumber = isRound2 ? 2 : 1;
 
       console.log(`Running Allotment - Mode: Round ${currentRoundNumber}`);
 
       for (const faculty of sortedFaculty) {
-        const currentFacultyAllocations = existingAllocations.filter(a => a.user.id === faculty.id);
+        const currentFacultyAllocations = existingAllocations.filter(a => a.user.id === faculty.id && a.role === 'theory');
         const currentCount = currentFacultyAllocations.length;
-
-        // DYNAMIC QUOTA CHECK: Use the faculty's specific limit
         const facultyLimit = faculty.maxLoad || 2; 
 
-        if (currentCount >= facultyLimit) {
-           // Skip if quota full
-           continue;
-        }
+        if (currentCount >= facultyLimit) continue;
 
         const prefs = await storage.getUserPreferences(faculty.id);
 
         for (const pref of prefs) {
-          const isSubjectTakenByThisFaculty = currentFacultyAllocations.some(a => a.subject.id === pref.subjectId);
+          const isSubjectTaken = currentFacultyAllocations.some(a => a.subject.id === pref.subjectId);
           const slotsLeft = subjectAvailability.get(pref.subjectId) || 0;
 
-          if (isSubjectTakenByThisFaculty) continue;
+          if (isSubjectTaken) continue;
           if (slotsLeft <= 0) continue;
 
           newAllocations.push({
             userId: faculty.id,
             subjectId: pref.subjectId,
-            roundNumber: currentRoundNumber 
+            roundNumber: currentRoundNumber,
+            role: 'theory',
+            section: 1 // Default for theory
           });
 
           subjectAvailability.set(pref.subjectId, slotsLeft - 1);
@@ -423,6 +431,21 @@ export async function registerRoutes(
     }
   });
 
+  // NEW: RUN LAB ALLOTMENT ALGORITHM
+  app.post("/api/admin/run-lab-allotment", requireAdmin, async (req, res) => {
+    try {
+      const result = await storage.runLabAlgorithm();
+      return res.json({ 
+        message: "Lab allotment completed successfully", 
+        allocations: result.allocatedCount,
+        details: result.messages
+      });
+    } catch (error) {
+      console.error("Lab Allotment Error:", error);
+      return res.status(500).json({ message: "Lab algorithm failed" });
+    }
+  });
+
   app.get("/api/allocations/my", requireAuth, async (req, res) => {
     try {
       const allocations = await storage.getUserAllocations(req.session.userId!);
@@ -432,7 +455,7 @@ export async function registerRoutes(
     }
   });
 
-  // MANUAL ALLOCATION (Single Selection)
+  // MANUAL ALLOCATION (Single Selection - Theory Only by default)
   app.post("/api/allocations", requireAuth, async (req, res) => {
     try {
       if (req.session.user?.role === "admin") return res.status(403).json({ message: "Admins cannot select subjects." });
@@ -450,13 +473,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: `You have reached your limit of ${facultyLimit} subjects` });
       }
 
-      // Dynamic Round Calculation:
       const roundNumber = currentCount + 1;
 
       const allocation = await storage.createAllocation({ 
         userId, 
         subjectId, 
-        roundNumber 
+        roundNumber,
+        role: 'theory', // Explicitly theory
+        section: 1
       });
 
       return res.json(allocation);
@@ -488,6 +512,8 @@ export async function registerRoutes(
 
   app.get("/api/admin/analytics", requireAuth, requireAdmin, async (req, res) => {
     try {
+      // Analytics might need updating to separate Labs vs Theory visually, 
+      // but the data structure remains valid for now.
       const [subjects, allocationsData] = await Promise.all([
         storage.getAllSubjects(),
         storage.getAllAllocations(),
@@ -505,7 +531,14 @@ export async function registerRoutes(
         if (!acc[facultyId]) {
           acc[facultyId] = { user: allocation.user, subjects: [] };
         }
-        acc[facultyId].subjects.push({ ...allocation.subject, allocationId: allocation.id });
+        // Add role info to the subject display
+        const displaySubject = { 
+            ...allocation.subject, 
+            allocationId: allocation.id,
+            allocationRole: allocation.role, // Pass this to frontend
+            allocationSection: allocation.section 
+        };
+        acc[facultyId].subjects.push(displaySubject);
         return acc;
       }, {});
 

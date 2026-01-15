@@ -25,7 +25,7 @@ export interface IStorage {
   getAllFaculty(): Promise<User[]>;
   deleteUser(id: string): Promise<void>;
   updateFacultySeniority(items: { id: string; seniority: number }[]): Promise<void>;
-  updateFacultyLoad(id: string, maxLoad: number): Promise<void>; // NEW
+  updateFacultyLoad(id: string, maxLoad: number, labLoad?: number): Promise<void>; // Updated signature
 
   // Subject operations
   getAllSubjects(): Promise<Subject[]>;
@@ -42,6 +42,9 @@ export interface IStorage {
   deleteAllocation(id: string): Promise<void>;
   getAllAllocations(): Promise<(Allocation & { user: User; subject: Subject })[]>;
   checkAllocationLimit(userId: string): Promise<number>;
+
+  // NEW: Lab Allocation Logic
+  runLabAlgorithm(): Promise<{ allocatedCount: number; messages: string[] }>;
 
   // Preference operations
   getUserPreferences(userId: string): Promise<(SubjectPreference & { subject: Subject })[]>;
@@ -92,6 +95,15 @@ export class DatabaseStorage implements IStorage {
           .where(eq(users.id, item.id));
       }
     });
+  }
+
+  async updateFacultyLoad(id: string, maxLoad: number, labLoad?: number): Promise<void> {
+    const updates: any = { maxLoad };
+    if (labLoad !== undefined) updates.labLoad = labLoad;
+
+    await db.update(users)
+      .set(updates)
+      .where(eq(users.id, id));
   }
 
   // Subject operations
@@ -171,11 +183,179 @@ export class DatabaseStorage implements IStorage {
   }
 
   async checkAllocationLimit(userId: string): Promise<number> {
+    // Only counts theory subjects for the main limit
     const result = await db
       .select()
       .from(allocations)
-      .where(eq(allocations.userId, userId));
+      .where(and(eq(allocations.userId, userId), eq(allocations.role, "theory")));
     return result.length;
+  }
+
+  // ============================================
+  //   LAB ALLOCATION ALGORITHM (Your Approach)
+  // ============================================
+  async runLabAlgorithm(): Promise<{ allocatedCount: number; messages: string[] }> {
+    const messages: string[] = [];
+    const newAllocations: InsertAllocation[] = [];
+
+    // 1. Fetch Data
+    const allFaculty = await this.getAllFaculty();
+    const allSubjects = await this.getAllSubjects();
+    const theoryAllocations = await db.select().from(allocations).where(eq(allocations.role, "theory"));
+
+    // Maps
+    const facultyMap = new Map(allFaculty.map(f => [f.id, f]));
+    const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
+
+    // Tracking Workload
+    interface Workload {
+      userId: string;
+      coordinatorCount: number;
+      coTeacherCount: number;
+      totalLabs: number;
+    }
+    const workloadMap = new Map<string, Workload>();
+    allFaculty.forEach(f => workloadMap.set(f.id, { 
+      userId: f.id, coordinatorCount: 0, coTeacherCount: 0, totalLabs: 0 
+    }));
+
+    // Helper to track section usage
+    const labUsage = new Map<string, { [section: number]: { coord: string | null, coTeachers: string[] } }>();
+
+    const getLabUsage = (subjectId: string, section: number) => {
+      if (!labUsage.has(subjectId)) labUsage.set(subjectId, {});
+      const subjectUsage = labUsage.get(subjectId)!;
+      if (!subjectUsage[section]) subjectUsage[section] = { coord: null, coTeachers: [] };
+      return subjectUsage[section];
+    };
+
+    // Helper to add allocation (in-memory)
+    const assign = (userId: string, subjectId: string, section: number, role: 'coordinator' | 'co_teacher') => {
+      const w = workloadMap.get(userId)!;
+      const usage = getLabUsage(subjectId, section);
+
+      // Validation Limits
+      if (role === 'coordinator' && usage.coord) return false; // Already has coord
+      if (role === 'co_teacher' && usage.coTeachers.length >= 3) return false; // Max 3 co-teachers
+      if (role === 'coordinator' && w.coordinatorCount >= 1) return false; // Max 1 coord role per faculty
+      if (w.totalLabs >= (facultyMap.get(userId)?.labLoad || 3)) return false; // Met individual quota
+
+      // Apply
+      newAllocations.push({ userId, subjectId, section, role, roundNumber: 99 }); // 99 indicates System Auto
+      w.totalLabs++;
+      if (role === 'coordinator') {
+        w.coordinatorCount++;
+        usage.coord = userId;
+      } else {
+        w.coTeacherCount++;
+        usage.coTeachers.push(userId);
+      }
+      return true;
+    };
+
+    // ---------------------------------------------------------
+    // PHASE 1: Mandatory Coordinators (Linked to Theory)
+    // ---------------------------------------------------------
+    for (const alloc of theoryAllocations) {
+      const theorySubject = subjectMap.get(alloc.subjectId);
+      if (!theorySubject) continue;
+
+      // Find Linked Lab
+      const labSubject = allSubjects.find(s => s.relatedTheoryId === theorySubject.id && s.isLab);
+
+      if (labSubject) {
+        const userId = alloc.userId;
+        // Logic: Teacher gets subject -> Must be Coordinator of Linked Lab (Section 1)
+        // Conflict check: If already Coordinator elsewhere, assign as Co-teacher instead
+        const w = workloadMap.get(userId)!;
+
+        if (w.coordinatorCount === 0) {
+          const success = assign(userId, labSubject.id, 1, 'coordinator');
+          if (success) messages.push(`Assigned ${facultyMap.get(userId)?.username} as Coordinator for ${labSubject.code} (Linked)`);
+        } else {
+          const success = assign(userId, labSubject.id, 1, 'co_teacher');
+          if (success) messages.push(`Assigned ${facultyMap.get(userId)?.username} as Co-teacher for ${labSubject.code} (Linked - already coord)`);
+        }
+      }
+    }
+
+    // ---------------------------------------------------------
+    // PHASE 2: Fill Remaining Quota with Co-teacher Roles (Same Subject Priority)
+    // ---------------------------------------------------------
+    for (const faculty of allFaculty) {
+      const w = workloadMap.get(faculty.id)!;
+      if (w.totalLabs >= faculty.labLoad) continue;
+
+      // Find labs they are already assigned to
+      const currentLabIds = newAllocations
+        .filter(a => a.userId === faculty.id)
+        .map(a => a.subjectId);
+
+      for (const labId of currentLabIds) {
+        if (w.totalLabs >= faculty.labLoad) break;
+
+        const labSubject = subjectMap.get(labId)!;
+        // Try other sections (2, 3...)
+        for (let sec = 1; sec <= (labSubject.sections || 3); sec++) {
+          // Skip if already in this section
+          const inThisSection = newAllocations.some(a => a.userId === faculty.id && a.subjectId === labId && a.section === sec);
+          if (inThisSection) continue;
+
+          const success = assign(faculty.id, labId, sec, 'co_teacher');
+          if (success) messages.push(`Assigned ${faculty.username} as Co-teacher for ${labSubject.code} Section ${sec} (Fill quota)`);
+          if (w.totalLabs >= faculty.labLoad) break;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------
+    // PHASE 3: Preferences for Remaining Unfilled Quotas (Non-Lab Faculty)
+    // ---------------------------------------------------------
+    // Sort faculty by remaining need (descending)
+    const needyFaculty = allFaculty.filter(f => workloadMap.get(f.id)!.totalLabs < f.labLoad);
+
+    for (const faculty of needyFaculty) {
+      const w = workloadMap.get(faculty.id)!;
+      const prefs = await this.getUserPreferences(faculty.id); // Get their prefs
+
+      // Filter only Lab subjects from prefs
+      const labPrefs = prefs.filter(p => p.subject.isLab);
+
+      for (const pref of labPrefs) {
+        if (w.totalLabs >= faculty.labLoad) break;
+
+        const labSubject = pref.subject;
+        const totalSections = labSubject.sections || 3;
+
+        for (let sec = 1; sec <= totalSections; sec++) {
+           if (w.totalLabs >= faculty.labLoad) break;
+
+           // Can they be Coordinator? (Priority)
+           if (w.coordinatorCount === 0) {
+             const success = assign(faculty.id, labSubject.id, sec, 'coordinator');
+             if (success) {
+               messages.push(`Assigned ${faculty.username} as Coordinator for ${labSubject.code} Section ${sec} (Preference)`);
+               continue; // Move to next pref or next section
+             }
+           }
+
+           // Else Co-teacher
+           const success = assign(faculty.id, labSubject.id, sec, 'co_teacher');
+           if (success) messages.push(`Assigned ${faculty.username} as Co-teacher for ${labSubject.code} Section ${sec} (Preference)`);
+        }
+      }
+    }
+
+    // 4. Commit to DB
+    if (newAllocations.length > 0) {
+      // First, remove existing lab allocations to avoid conflicts if re-running
+      // This is a "clean slate" for labs approach
+      await db.delete(allocations).where(sql`${allocations.role} IN ('coordinator', 'co_teacher')`);
+
+      await db.insert(allocations).values(newAllocations);
+    }
+
+    return { allocatedCount: newAllocations.length, messages };
   }
 
   // Preference operations
@@ -232,12 +412,6 @@ export class DatabaseStorage implements IStorage {
       return defaults[0];
     }
     return result[0];
-  }
-
-  async updateFacultyLoad(id: string, maxLoad: number): Promise<void> {
-    await db.update(users)
-      .set({ maxLoad })
-      .where(eq(users.id, id));
   }
 
   async updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
