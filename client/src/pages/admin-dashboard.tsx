@@ -736,6 +736,8 @@ export default function AdminDashboard() {
       credits: parseInt(formData.credits),
       description: formData.description,
       sections: parseInt(formData.sections) || 1,
+      isLab: formData.isLab,
+      relatedTheoryId: formData.relatedTheoryId || null,
     });
   };
 
@@ -748,6 +750,8 @@ export default function AdminDashboard() {
       credits: parseInt(formData.credits),
       description: formData.description,
       sections: parseInt(formData.sections) || 1,
+      isLab: formData.isLab,
+      relatedTheoryId: formData.relatedTheoryId || null,
     });
   };
 
