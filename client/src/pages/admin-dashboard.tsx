@@ -1339,7 +1339,7 @@ export default function AdminDashboard() {
                     <SelectValue placeholder="Select theory subject..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {subjects?.filter(s => !s.isLab).map(s => (
+                    {(subjectsList as any[]).filter(s => !s.isLab).map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1462,7 +1462,7 @@ export default function AdminDashboard() {
                     <SelectValue placeholder="Select theory subject..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {subjects?.filter(s => !s.isLab && s.id !== editingSubject?.id).map(s => (
+                    {(subjectsList as any[]).filter(s => !s.isLab && s.id !== editingSubject?.id).map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
                     ))}
                   </SelectContent>
