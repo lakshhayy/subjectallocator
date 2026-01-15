@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Users, BookOpen, CheckCircle2, AlertCircle, Play, RotateCcw, Trash2, Plus, Edit2, GripVertical, Save, Settings, Download, Search, Upload, User, FileDown, GraduationCap } from "lucide-react"; 
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -155,11 +156,11 @@ function FacultyManagement() {
   };
 
   const updateLoadMutation = useMutation({
-    mutationFn: async ({ id, maxLoad }: { id: string, maxLoad: number }) => {
+    mutationFn: async ({ id, maxLoad, labLoad }: { id: string, maxLoad: number, labLoad?: number }) => {
       await fetch("/api/admin/faculty/load", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, maxLoad })
+        body: JSON.stringify({ id, maxLoad, labLoad })
       });
     },
     onSuccess: () => {
@@ -267,21 +268,39 @@ function FacultyManagement() {
                 </div>
 
                 {/* Quota Input */}
-                <div className="flex items-center gap-2 mr-4">
-                  <label className="text-xs text-muted-foreground font-medium">Quota:</label>
-                  <Input 
-                    type="number" 
-                    className="h-8 w-16 text-center" 
-                    defaultValue={f.maxLoad || 2}
-                    min={0}
-                    max={5}
-                    onBlur={(e) => {
-                      const val = parseInt(e.target.value);
-                      if (!isNaN(val) && val !== f.maxLoad) {
-                        updateLoadMutation.mutate({ id: f.id, maxLoad: val });
-                      }
-                    }}
-                  />
+                <div className="flex items-center gap-4 mr-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">Theory Quota:</label>
+                    <Input 
+                      type="number" 
+                      className="h-8 w-16 text-center" 
+                      defaultValue={f.maxLoad || 2}
+                      min={0}
+                      max={5}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val !== f.maxLoad) {
+                          updateLoadMutation.mutate({ id: f.id, maxLoad: val, labLoad: f.labLoad });
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">Lab Quota:</label>
+                    <Input 
+                      type="number" 
+                      className="h-8 w-16 text-center" 
+                      defaultValue={f.labLoad || 3}
+                      min={0}
+                      max={10}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val !== f.labLoad) {
+                          updateLoadMutation.mutate({ id: f.id, maxLoad: f.maxLoad, labLoad: val });
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDelete(f.id)}>
@@ -315,6 +334,8 @@ export default function AdminDashboard() {
     credits: "4",
     description: "",
     sections: "1",
+    isLab: false,
+    relatedTheoryId: "",
   });
 
   const [minPreferences, setMinPreferences] = useState(7);
@@ -603,6 +624,8 @@ export default function AdminDashboard() {
         credits: "4",
         description: "",
         sections: "1",
+        isLab: false,
+        relatedTheoryId: "",
       });
       toast({
         title: "Success",
@@ -738,6 +761,8 @@ export default function AdminDashboard() {
       credits: subject.credits.toString(),
       description: subject.description,
       sections: (subject.sections || 1).toString(),
+      isLab: (subject as any).isLab || false,
+      relatedTheoryId: (subject as any).relatedTheoryId || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -1282,17 +1307,6 @@ export default function AdminDashboard() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="credits">Credits</Label>
-                <Input
-                  id="credits"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={formData.credits}
-                  onChange={(e) => setFormData({...formData, credits: e.target.value})}
-                />
-              </div>
-              <div>
                 <Label htmlFor="sections">Sections</Label>
                 <Input
                   id="sections"
@@ -1304,7 +1318,34 @@ export default function AdminDashboard() {
                   onChange={(e) => setFormData({...formData, sections: e.target.value})}
                 />
               </div>
+              <div className="flex items-center space-x-2 pt-6">
+                <Checkbox 
+                  id="isLab" 
+                  checked={formData.isLab} 
+                  onCheckedChange={(checked) => setFormData({...formData, isLab: checked as boolean})}
+                />
+                <Label htmlFor="isLab">Is Lab Subject</Label>
+              </div>
             </div>
+
+            {formData.isLab && (
+              <div>
+                <Label htmlFor="relatedTheoryId">Related Theory Subject</Label>
+                <Select 
+                  value={formData.relatedTheoryId} 
+                  onValueChange={(value) => setFormData({...formData, relatedTheoryId: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select theory subject..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects?.filter(s => !s.isLab).map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label htmlFor="description">Description</Label>
               <Input
@@ -1388,17 +1429,46 @@ export default function AdminDashboard() {
                 onChange={(e) => setFormData({...formData, credits: e.target.value})}
               />
             </div>
-            <div>
-              <Label htmlFor="edit-sections">Sections</Label>
-              <Input
-                id="edit-sections"
-                type="number"
-                min="1"
-                max="10"
-                value={formData.sections}
-                onChange={(e) => setFormData({...formData, sections: e.target.value})}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-sections">Sections</Label>
+                <Input
+                  id="edit-sections"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.sections}
+                  onChange={(e) => setFormData({...formData, sections: e.target.value})}
+                />
+              </div>
+              <div className="flex items-center space-x-2 pt-6">
+                <Checkbox 
+                  id="edit-isLab" 
+                  checked={formData.isLab} 
+                  onCheckedChange={(checked) => setFormData({...formData, isLab: checked as boolean})}
+                />
+                <Label htmlFor="edit-isLab">Is Lab Subject</Label>
+              </div>
             </div>
+
+            {formData.isLab && (
+              <div>
+                <Label htmlFor="edit-relatedTheoryId">Related Theory Subject</Label>
+                <Select 
+                  value={formData.relatedTheoryId} 
+                  onValueChange={(value) => setFormData({...formData, relatedTheoryId: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select theory subject..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects?.filter(s => !s.isLab && s.id !== editingSubject?.id).map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label htmlFor="edit-description">Description</Label>
               <Input
