@@ -737,7 +737,7 @@ export default function AdminDashboard() {
       description: formData.description,
       sections: parseInt(formData.sections) || 1,
       isLab: formData.isLab,
-      relatedTheoryId: formData.relatedTheoryId || null,
+      relatedTheoryId: formData.relatedTheoryId || undefined,
     });
   };
 
@@ -751,7 +751,7 @@ export default function AdminDashboard() {
       description: formData.description,
       sections: parseInt(formData.sections) || 1,
       isLab: formData.isLab,
-      relatedTheoryId: formData.relatedTheoryId || null,
+      relatedTheoryId: formData.relatedTheoryId || undefined,
     });
   };
 
