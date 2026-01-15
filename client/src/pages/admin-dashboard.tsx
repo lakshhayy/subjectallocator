@@ -94,7 +94,9 @@ interface Subject {
   type: string;
   credits: number;
   description: string;
-  sections: number; 
+  sections: number;
+  isLab?: boolean;
+  relatedTheoryId?: string;
 }
 
 const SUBJECT_TYPES = ["Core", "Elective", "Lab", "Project", "Internship"];
@@ -1213,6 +1215,11 @@ export default function AdminDashboard() {
                           <div className="flex items-baseline gap-2">
                             <h3 className="font-semibold">{subject.code}</h3>
                             <p className="text-sm text-muted-foreground">Semester {subject.semester}</p>
+                            {subject.isLab && (
+                              <span className="ml-2 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider border border-indigo-200">
+                                Lab
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm mt-1">{subject.name}</p>
                           <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
