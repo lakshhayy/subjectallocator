@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import "dotenv/config";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import rateLimit from "express-rate-limit"; // NEW: Import rate-limit
@@ -24,7 +25,7 @@ const generalLimiter = rateLimit({
 // Stricter rate limiting for authentication (Login)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // Max 10 attempts per 15 mins
+  max: 100, // Increased for local testing
   message: { message: "Too many login attempts, please try again after 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -136,12 +137,11 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "5001", 10);
   httpServer.listen(
     {
       port,
-      host: "0.0.0.0",
-      reusePort: true,
+      host: "127.0.0.1",
     },
     () => {
       log(`serving on port ${port}`);
